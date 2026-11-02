@@ -4,22 +4,28 @@ import doitlib
 import numpy as np
 from PIL import Image
 
+
 def save_x_to_image(x_final, filename):
     # Normalize x_final to be in the valid image range [0, 255]
-    x_final = (x_final - x_final.min()) / (x_final.max() - x_final.min())  # Normalize to [0,1]
+    x_final = (x_final - x_final.min()) / \
+        (x_final.max() - x_final.min())  # Normalize to [0,1]
     x_final = (x_final * 255).astype(np.uint8)  # Scale to [0,255]
     # Check the shape and adjust for grayscale images (MNIST)
     if x_final.shape[0] == 1:  # Remove batch dimension if present
         x_final = x_final[0]
-      
-    if x_final.shape[-1] == 1:  # MNIST has an extra channel dimension (28,28,1)
-        x_final = x_final.squeeze(-1)  # Remove channel dimension to get (28,28)
+
+    # MNIST has an extra channel dimension (28,28,1)
+    if x_final.shape[-1] == 1:
+        # Remove channel dimension to get (28,28)
+        x_final = x_final.squeeze(-1)
     # Convert to PIL image
-    image_mode = "L" if x_final.ndim == 2 else "RGB"  # 'L' for grayscale, 'RGB' for color
+    # 'L' for grayscale, 'RGB' for color
+    image_mode = "L" if x_final.ndim == 2 else "RGB"
     image = Image.fromarray(x_final, mode=image_mode)
     # Create a unique temporary file in the current directory
     image.save(filename)
     print(f"Image saved {filename}")
+
 
 if len(sys.argv) != 4:
     print(f"Usage {sys.argv[0]} dataset input_size cex_json_file\n")
@@ -37,4 +43,4 @@ for cex in data:
         continue
     idx = cex["index"]
     x = x_test[idx]
-    save_x_to_image(x,f"orig_{dataset}_{idx}.png")
+    save_x_to_image(x, f"orig_{dataset}_{idx}.png")

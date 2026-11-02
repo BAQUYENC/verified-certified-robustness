@@ -4,6 +4,7 @@
 # Therefore this attack code uses gradient descent to find an input that produces the zero output vector [0,0,0,...,0]
 # This works against any gloro trained model
 
+from gloro.models import GloroNet
 import doitlib
 import numpy as np
 import tensorflow as tf
@@ -17,25 +18,27 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Flatten, Dense, Layer
 
 if len(sys.argv) != 7:
-    print(f"Usage: {sys.argv[0]} dataset INTERNAL_LAYER_SIZES model_weights_csv_dir output_adversarial_image_file input_size eval_epsilon\n");
+    print(
+        f"Usage: {sys.argv[0]} dataset INTERNAL_LAYER_SIZES model_weights_csv_dir output_adversarial_image_file input_size eval_epsilon\n")
     sys.exit(1)
 
-dataset=sys.argv[1]
-    
-INTERNAL_LAYER_SIZES=eval(sys.argv[2])
+dataset = sys.argv[1]
 
-csv_loc=sys.argv[3]+"/"
+INTERNAL_LAYER_SIZES = eval(sys.argv[2])
 
-output_file=sys.argv[4]
+csv_loc = sys.argv[3]+"/"
 
-input_size=int(sys.argv[5])
+output_file = sys.argv[4]
 
-epsilon=float(sys.argv[6])
+input_size = int(sys.argv[5])
+
+epsilon = float(sys.argv[6])
 
 print(f"Running with internal layer dimensions: {INTERNAL_LAYER_SIZES}")
 print(f"Running with input_size: {input_size}")
-    
-inputs, outputs = doitlib.build_model(Input, Flatten, Dense, input_size=input_size, dataset=dataset, internal_layer_sizes=INTERNAL_LAYER_SIZES)
+
+inputs, outputs = doitlib.build_model(
+    Input, Flatten, Dense, input_size=input_size, dataset=dataset, internal_layer_sizes=INTERNAL_LAYER_SIZES)
 model = Model(inputs, outputs)
 
 print("Building zero-bias gloro model from saved weights...")
@@ -45,12 +48,13 @@ doitlib.load_and_set_weights(csv_loc, INTERNAL_LAYER_SIZES, model)
 # Initialize input variable (randomly or meaningfully)
 x = tf.Variable(tf.random.normal([1] + list(model.input_shape[1:])))
 
-initial_learning_rate=0.1
-final_learning_rate=5e-7
-max_steps=10000
+initial_learning_rate = 0.1
+final_learning_rate = 5e-7
+max_steps = 10000
 
 # Solve for decay_rate using the equation: final_lr = initial_lr * decay_rate^(max_steps)
-decay_rate = np.exp(np.log(final_learning_rate / initial_learning_rate) / max_steps)
+decay_rate = np.exp(np.log(final_learning_rate /
+                    initial_learning_rate) / max_steps)
 
 lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
     initial_learning_rate=initial_learning_rate,
@@ -94,7 +98,6 @@ x_final = x.numpy()
 
 y_final = model(x, training=False).numpy()
 
-import numpy as np
 
 max_logit = np.max(y_final)
 
@@ -107,9 +110,7 @@ print("max_logit: ", max_logit)
 print(f"There are {count_max_logits} that have this same value")
 
 
-
 # now test the gloro model
-from gloro.models import GloroNet
 
 
 g = GloroNet(model=model, epsilon=epsilon)
@@ -126,11 +127,12 @@ if preds[0] == bot_index:
     sys.exit(1)
 else:
     print(f"Gloro says this output is robust at epsilon {epsilon}!")
-    
+
 # save the found input as an image
 
 # Normalize x_final to be in the valid image range [0, 255]
-x_final = (x_final - x_final.min()) / (x_final.max() - x_final.min())  # Normalize to [0,1]
+x_final = (x_final - x_final.min()) / \
+    (x_final.max() - x_final.min())  # Normalize to [0,1]
 x_final = (x_final * 255).astype(np.uint8)  # Scale to [0,255]
 
 # Check the shape and adjust for grayscale images (MNIST)
@@ -141,7 +143,8 @@ if x_final.shape[-1] == 1:  # MNIST has an extra channel dimension (28,28,1)
     x_final = x_final.squeeze(-1)  # Remove channel dimension to get (28,28)
 
 # Convert to PIL image
-image_mode = "L" if x_final.ndim == 2 else "RGB"  # 'L' for grayscale, 'RGB' for color
+# 'L' for grayscale, 'RGB' for color
+image_mode = "L" if x_final.ndim == 2 else "RGB"
 image = Image.fromarray(x_final, mode=image_mode)
 
 image.save(output_file)

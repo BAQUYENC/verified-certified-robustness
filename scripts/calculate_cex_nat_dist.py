@@ -7,11 +7,14 @@ from mpmath import mp, mpf, sqrt, nstr, floor
 
 mp.dps = 60  # massive precision
 
+
 def vector_to_mph(v):
     return list(map(mpf, np.asarray(v).flatten().tolist()))
 
+
 def l2_norm_mph(vector1, vector2):
     return sqrt(sum((x - y)**2 for x, y in zip(vector1, vector2)))
+
 
 if len(sys.argv) != 4:
     print(f"Usage {sys.argv[0]} dataset input_size cex_json_file\n")
@@ -37,11 +40,12 @@ for cex in data:
     cex["nat_x1_dist"] = str(dist)
     new_data.append(cex)
 
+
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
         return super().default(obj)
 
-print(json.dumps(new_data, indent=2, cls=NumpyEncoder))
 
+print(json.dumps(new_data, indent=2, cls=NumpyEncoder))

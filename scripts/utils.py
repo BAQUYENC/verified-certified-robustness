@@ -12,12 +12,12 @@ from tensorflow.keras.optimizers import SGD
 
 
 def data_augmentation(
-        flip=True, 
-        saturation=(0.5, 1.2), 
-        contrast=(0.8, 1.2), 
+        flip=True,
+        saturation=(0.5, 1.2),
+        contrast=(0.8, 1.2),
         zoom=0.1,
         noise=None):
-    
+
     def augment(x, y):
         batch_size = tf.shape(x)[0]
         input_shape = x.shape[1:]
@@ -55,7 +55,7 @@ def data_augmentation(
             x = x + tf.random.normal(tf.shape(x), stddev=noise)
 
         return x, y
-    
+
     return augment
 
 
@@ -112,20 +112,20 @@ def get_data(dataset, batch_size, augmentation=None):
         y_te = np.load(f'{tiny_imagenet_dir}/TinyImagenet_test_y.npy')
 
         train = (Dataset.from_tensor_slices((x_tr, y_tr))
-            .cache()
-            .batch(batch_size)
-            .map(
-                augmentation, 
-                num_parallel_calls=tf.data.experimental.AUTOTUNE,
-                deterministic=False)
+                 .cache()
+                 .batch(batch_size)
+                 .map(
+            augmentation,
+            num_parallel_calls=tf.data.experimental.AUTOTUNE,
+            deterministic=False)
             .prefetch(tf.data.experimental.AUTOTUNE))
 
         test = (Dataset.from_tensor_slices((x_te, y_te))
-            .cache()
-            .batch(batch_size)
-            .prefetch(tf.data.experimental.AUTOTUNE))
+                .cache()
+                .batch(batch_size)
+                .prefetch(tf.data.experimental.AUTOTUNE))
 
-        metadata = lambda: None
+        def metadata(): return None
         metadata.features = {
             'image': lambda: None,
             'label': lambda: None,
@@ -133,7 +133,7 @@ def get_data(dataset, batch_size, augmentation=None):
         metadata.features['label'].num_classes = 200
         metadata.features['image'].shape = (64, 64, 3)
 
-    else: 
+    else:
         tfds_dir = os.environ['TFDS_DIR'] if 'TFDS_DIR' in os.environ else None
 
         split = ['train', 'test']
@@ -141,32 +141,32 @@ def get_data(dataset, batch_size, augmentation=None):
         (train, test), metadata = tfds.load(
             dataset,
             data_dir=tfds_dir,
-            split=split, 
-            with_info=True, 
-            shuffle_files=True, 
+            split=split,
+            with_info=True,
+            shuffle_files=True,
             as_supervised=True)
 
         train = (train
-            .map(
-                lambda x,y: (tf.cast(x, 'float32') / 255., y), 
-                num_parallel_calls=tf.data.experimental.AUTOTUNE,
-                deterministic=False)
-            .cache()
-            .batch(batch_size)
-            .map(
-                augmentation, 
-                num_parallel_calls=tf.data.experimental.AUTOTUNE,
-                deterministic=False)
-            .prefetch(tf.data.experimental.AUTOTUNE))
+                 .map(
+                     lambda x, y: (tf.cast(x, 'float32') / 255., y),
+                     num_parallel_calls=tf.data.experimental.AUTOTUNE,
+                     deterministic=False)
+                 .cache()
+                 .batch(batch_size)
+                 .map(
+                     augmentation,
+                     num_parallel_calls=tf.data.experimental.AUTOTUNE,
+                     deterministic=False)
+                 .prefetch(tf.data.experimental.AUTOTUNE))
 
         test = (test
-            .map(
-                lambda x,y: (tf.cast(x, 'float32') / 255., y), 
-                num_parallel_calls=tf.data.experimental.AUTOTUNE,
-                deterministic=False)
-            .cache()
-            .batch(batch_size)
-            .prefetch(tf.data.experimental.AUTOTUNE))
+                .map(
+                    lambda x, y: (tf.cast(x, 'float32') / 255., y),
+                    num_parallel_calls=tf.data.experimental.AUTOTUNE,
+                    deterministic=False)
+                .cache()
+                .batch(batch_size)
+                .prefetch(tf.data.experimental.AUTOTUNE))
 
     return train, test, metadata
 

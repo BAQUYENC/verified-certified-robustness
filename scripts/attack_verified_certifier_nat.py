@@ -25,6 +25,7 @@ from mpmath import mp, mpf, sqrt, nstr, floor
 
 mp.dps = 60  # massive precision
 
+
 def round_down(x, decimals=0):
     """
     Round down (toward -∞) an mpf to a fixed number of decimal places.
@@ -39,14 +40,18 @@ class NumpyEncoder(json.JSONEncoder):
             return obj.tolist()
         return super().default(obj)
 
+
 def vector_to_mph(v):
     return list(map(mpf, np.asarray(v).flatten().tolist()))
+
 
 def l2_norm_mph(vector1, vector2):
     return sqrt(sum((x - y)**2 for x, y in zip(vector1, vector2)))
 
+
 if len(sys.argv) < 7 or len(sys.argv) > 8:
-    print(f"Usage: {sys.argv[0]} float_format dataset INTERNAL_LAYER_SIZES model_weights_csv_dir input_size lipschitz_json [max_cex]\n")
+    print(
+        f"Usage: {sys.argv[0]} float_format dataset INTERNAL_LAYER_SIZES model_weights_csv_dir input_size lipschitz_json [max_cex]\n")
     sys.exit(1)
 
 max_cex = int(sys.argv[7]) if len(sys.argv) == 8 else None
@@ -120,7 +125,8 @@ def build_biased_model(original_model, B=1000.0, position="begin"):
         bias_layer = n_dense - 2
         correction_layer = n_dense - 1
     else:
-        raise ValueError(f"Unknown bias position '{position}', expected 'begin' or 'end'")
+        raise ValueError(
+            f"Unknown bias position '{position}', expected 'begin' or 'end'")
 
     print(f"  Bias position: {position} "
           f"(bias on layer {bias_layer}, correction on layer {correction_layer})")
@@ -198,8 +204,10 @@ if fp_bias > 0:
         w = dl.get_weights()
         b = w[1].astype(np.float64)  # upcast for exact decimal repr
         bias_vecs.append(b)
+
     def _fmt(x):
         return f"{x:.150f}"
+
     def _vec_bracket(v):
         return "[" + ",".join(_fmt(x) for x in v) + "]"
     bias_text = ",".join(_vec_bracket(v) for v in bias_vecs)
@@ -223,8 +231,10 @@ def load_lipschitz_matrix(path):
             return L
     raise ValueError("Could not find 'lipschitz_bounds' in JSON")
 
+
 L_matrix = load_lipschitz_matrix(lipschitz_json)
 print("Loaded L matrix shape:", L_matrix.shape)
+
 
 def certifier_oracle_logits_mp(y_np, eps_val, i_star):
     y = np.asarray(y_np).ravel()
@@ -246,6 +256,7 @@ def certifier_oracle_logits_mp(y_np, eps_val, i_star):
         if slack <= mp.mpf('0'):
             return False, min_slack
     return True, min_slack
+
 
 def check_counter_example(x0, x1, model, verbose=False):
     y0 = model(x0, training=False).numpy()[0]
@@ -290,7 +301,6 @@ def check_counter_example(x0, x1, model, verbose=False):
             return False, None
 
 
-
 # version-safe import
 try:
     from art.estimators.classification import TensorFlowV2Classifier
@@ -298,11 +308,13 @@ try:
 except Exception as e:
     raise ImportError("DeepFool not available in this ART version") from e
 
+
 def _ensure_batched(x, model_input_shape):
     x = np.asarray(x)
     if x.ndim == len(model_input_shape) - 1:
         x = x[np.newaxis, ...]
     return x
+
 
 def optimize_to_competitor_deepfool_art(
     art_classifier,
@@ -347,18 +359,23 @@ def optimize_to_competitor_deepfool_art(
     # match return types: x_adv batched, logits 1D
     return x_adv[None, ...], np.asarray(logits_adv), j_star
 
+
 def save_x_to_image(x_final):
     # Normalize x_final to be in the valid image range [0, 255]
-    x_final = (x_final - x_final.min()) / (x_final.max() - x_final.min())  # Normalize to [0,1]
+    x_final = (x_final - x_final.min()) / \
+        (x_final.max() - x_final.min())  # Normalize to [0,1]
     x_final = (x_final * 255).astype(np.uint8)  # Scale to [0,255]
     # Check the shape and adjust for grayscale images (MNIST)
     if x_final.shape[0] == 1:  # Remove batch dimension if present
         x_final = x_final[0]
 
-    if x_final.shape[-1] == 1:  # MNIST has an extra channel dimension (28,28,1)
-        x_final = x_final.squeeze(-1)  # Remove channel dimension to get (28,28)
+    # MNIST has an extra channel dimension (28,28,1)
+    if x_final.shape[-1] == 1:
+        # Remove channel dimension to get (28,28)
+        x_final = x_final.squeeze(-1)
     # Convert to PIL image
-    image_mode = "L" if x_final.ndim == 2 else "RGB"  # 'L' for grayscale, 'RGB' for color
+    # 'L' for grayscale, 'RGB' for color
+    image_mode = "L" if x_final.ndim == 2 else "RGB"
     image = Image.fromarray(x_final, mode=image_mode)
     # Create a unique temporary file in the current directory
     with tempfile.NamedTemporaryFile(prefix="x_", suffix=".png", dir=".", delete=False) as f:
@@ -367,12 +384,14 @@ def save_x_to_image(x_final):
     print(f"Image saved {output_file}")
     return output_file
 
+
 def save_x_to_file(x):
     # Create a unique temporary file in the current directory
     with tempfile.NamedTemporaryFile(prefix="x_", suffix=".npy", dir=".", delete=False) as f:
         output_file = f.name
     np.save(output_file, x)
     return output_file
+
 
 def search_cex(model, x_nat, x_adv, verbose=False):
     x_nat = _ensure_batched(x_nat, model.input_shape)
@@ -382,28 +401,29 @@ def search_cex(model, x_nat, x_adv, verbose=False):
     i_star = np.argmax(y_nat)
     j_star = np.argmax(y_adv)
 
-    low  = np.float64(0.0)
+    low = np.float64(0.0)
     high = np.float64(1.0)
     x_nat64 = tf.cast(x_nat, tf.float64)
     x_adv64 = tf.cast(x_adv, tf.float64)
-    vec64   = x_adv64 - x_nat64
+    vec64 = x_adv64 - x_nat64
 
-    x_low=x_nat64
-    x_high=x_adv64
+    x_low = x_nat64
+    x_high = x_adv64
 
     def to_model_dtype(x64):
-        compute_dtype = getattr(getattr(model, "dtype_policy", None), "compute_dtype", None)
+        compute_dtype = getattr(
+            getattr(model, "dtype_policy", None), "compute_dtype", None)
         if compute_dtype is None:
             return x64  # many models accept float64; otherwise Keras will auto-cast
         return tf.cast(x64, compute_dtype)
 
-
     cex, max_eps = check_counter_example(x_low, x_high, model)
-    steps=0
+    steps = 0
     # invariant argmax(y_low) == i_star and argmax(y_high) == j_star
-    while high>=low and not cex:
-        if verbose and steps%10==0:
-            print(f"[search cex] steps {steps}, remaining search width {high-low}")
+    while high >= low and not cex:
+        if verbose and steps % 10 == 0:
+            print(
+                f"[search cex] steps {steps}, remaining search width {high-low}")
         mid = np.float64(0.5) * (low + high)
         # multiply in float64: cast 'mid' to a tf.float64 scalar
         mid_tf = tf.constant(mid, dtype=tf.float64)
@@ -413,14 +433,14 @@ def search_cex(model, x_nat, x_adv, verbose=False):
         argmax = np.argmax(y_mid)
 
         if argmax == i_star:
-            x_low=x_mid
-            low=np.nextafter(mid, np.float64(np.inf))
+            x_low = x_mid
+            low = np.nextafter(mid, np.float64(np.inf))
         elif argmax == j_star:
-            x_high=x_mid
-            high=np.nextafter(mid, np.float64(-np.inf))
+            x_high = x_mid
+            high = np.nextafter(mid, np.float64(-np.inf))
         else:
             # found something unexpected here: search towards x_adv
-            low=np.nextafter(mid, np.float64(np.inf))
+            low = np.nextafter(mid, np.float64(np.inf))
 
         steps += 1
         cex, max_eps = check_counter_example(x_low, x_high, model)
@@ -439,29 +459,30 @@ def search_cex(model, x_nat, x_adv, verbose=False):
         print(f"  y_high (argmax {j_star}: {y_high}")
     return x_low.numpy(), x_high.numpy(), cex, max_eps
 
+
 def try_to_improve_cex_by_extension(x0, x1, model):
     cex, max_eps = check_counter_example(x0, x1, model)
     assert cex
-
 
     # we extend the line from x0 to x1 looking for the largest counter-example we can
     follow = (x1-x0)
 
     def check_for_steps(steps):
         a = follow * steps
-        steps_to_find=0
-        cex=False
-        max_noisy_search=2000
-        while steps_to_find<max_noisy_search and not cex:
-            noise = np.random.normal(loc=0.0, scale=np.max(np.abs(a))*0.1, size=a.shape)
-            x1=np.clip(x0+a+noise, 0.0, 1.0)
+        steps_to_find = 0
+        cex = False
+        max_noisy_search = 2000
+        while steps_to_find < max_noisy_search and not cex:
+            noise = np.random.normal(
+                loc=0.0, scale=np.max(np.abs(a))*0.1, size=a.shape)
+            x1 = np.clip(x0+a+noise, 0.0, 1.0)
             cex, max_eps = check_counter_example(x0, x1, model)
-            steps_to_find=steps_to_find+1
+            steps_to_find = steps_to_find+1
         return cex, max_eps, x1
 
     max_max_eps = 0
-    steps=0
-    last_cex_found=-1
+    steps = 0
+    last_cex_found = -1
     max_max_eps = max_eps
     best_x1 = x1
     best_step = 0
@@ -477,24 +498,25 @@ def try_to_improve_cex_by_extension(x0, x1, model):
                 best_x1 = x1
                 best_step = steps
 
-    low=steps/2+1
-    high=steps-1
+    low = steps/2+1
+    high = steps-1
     while high >= low:
         mid = int(low + (high - low)/2)
-        print(f"[cex extend] mid {mid}, low {low}, high {high}, max_max_eps: {max_max_eps}")
+        print(
+            f"[cex extend] mid {mid}, low {low}, high {high}, max_max_eps: {max_max_eps}")
         cex, max_eps, x1 = check_for_steps(mid)
         if cex:
             if max_eps > max_max_eps:
                 max_max_eps = max_eps
                 best_x1 = x1
                 best_step = mid
-            low=mid+1
+            low = mid+1
         else:
-            high=mid-1
+            high = mid-1
 
-    x_final=best_x1
-    y_final=model(x_final, training=False).numpy()[0]
-    eps_final=max_max_eps
+    x_final = best_x1
+    y_final = model(x_final, training=False).numpy()[0]
+    eps_final = max_max_eps
     print(f"Best counter-example found on step: {best_step}")
     return x_final, best_step
 
@@ -521,7 +543,8 @@ def extend_cex_multi_ray(
     phaseA_steps=300,
     phaseA_lr=7e-3,
     phaseA_mode="limiting",           # accepted for compat; only "limiting" is used
-    soft_tau=0.08,                    # used in micro-polish soft-min across near-limiting set
+    # used in micro-polish soft-min across near-limiting set
+    soft_tau=0.08,
     hybrid_switch=3.0,                # compat no-op
 
     # ---- keep-label regularizer ----
@@ -560,7 +583,8 @@ def extend_cex_multi_ray(
     # ---------------- helpers ----------------
     def _ensure_batched(x):
         x = np.asarray(x)
-        want_nd = len(getattr(model, "input_shape", x.shape))  # includes batch dim if available
+        # includes batch dim if available
+        want_nd = len(getattr(model, "input_shape", x.shape))
         if x.ndim == max(1, want_nd - 1):
             x = x[None, ...]
         return x.astype(np.float32)
@@ -600,9 +624,11 @@ def extend_cex_multi_ray(
     def min_slack_np(z_vec, r, i_star):
         z = np.asarray(z_vec, dtype=np.float64)
         C = z.shape[0]
-        idxs = np.concatenate([np.arange(0, i_star), np.arange(i_star + 1, C)], axis=0)
+        idxs = np.concatenate(
+            [np.arange(0, i_star), np.arange(i_star + 1, C)], axis=0)
         Lrow = np.asarray(L_matrix, np.float64)[i_star, idxs]
-        vals = (z[i_star] - z[idxs]) - Lrow * float(r)   # larger is better; require ≥ kappa
+        # larger is better; require ≥ kappa
+        vals = (z[i_star] - z[idxs]) - Lrow * float(r)
         j_rel = int(np.argmin(vals))
         return float(vals[j_rel]), int(idxs[j_rel])
 
@@ -610,7 +636,8 @@ def extend_cex_multi_ray(
     def near_limiting_set(z_vec, r, i_star, K=4):
         z = np.asarray(z_vec, dtype=np.float64)
         C = z.shape[0]
-        idxs = np.concatenate([np.arange(0, i_star), np.arange(i_star + 1, C)], axis=0)
+        idxs = np.concatenate(
+            [np.arange(0, i_star), np.arange(i_star + 1, C)], axis=0)
         Lrow_all = np.asarray(L_matrix, np.float64)[i_star, idxs]
         s_vals = (z[i_star] - z[idxs]) - Lrow_all * float(r)
         order = np.argsort(s_vals)  # ascending: smaller slack = more limiting
@@ -631,7 +658,8 @@ def extend_cex_multi_ray(
     def _warmup_single_stage(x_center, radius, i_star, z_center, ms_center,
                              rays_stage1=rays_stage1, pre_steps=pre_steps, pre_lr=pre_lr, jitter=jitter_frac):
         if verbose:
-            print(f"[reseed] S1 {rays_stage1} rays (pre {pre_steps}) @ r={radius:.3e}, base_slack={ms_center:.3e}")
+            print(
+                f"[reseed] S1 {rays_stage1} rays (pre {pre_steps}) @ r={radius:.3e}, base_slack={ms_center:.3e}")
 
         def warmup_once(cand, steps, lr):
             opt = tf.keras.optimizers.legacy.Adam(learning_rate=lr)
@@ -669,7 +697,8 @@ def extend_cex_multi_ray(
             n_tan /= (tf.norm(_flat(n_tan)) + 1e-20)
             d = u0 + jitter * n_tan
             d /= (tf.norm(_flat(d)) + 1e-20)
-            cand = tf.Variable(tf.cast(tf.clip_by_value(x_a_tf + radius * d, clip_min, clip_max), tf.float32))
+            cand = tf.Variable(tf.cast(tf.clip_by_value(
+                x_a_tf + radius * d, clip_min, clip_max), tf.float32))
             ms_c, cand = warmup_once(cand, pre_steps, pre_lr)
             s1.append((ms_c, cand))
         s1.append((ms_center, tf.Variable(x_center.numpy())))
@@ -681,7 +710,8 @@ def extend_cex_multi_ray(
             best_x = best_cand.numpy()
 
         if verbose:
-            print(f"[reseed] best_slack={best_ms:.3e} (Δ={best_ms - ms_center:.3e})")
+            print(
+                f"[reseed] best_slack={best_ms:.3e} (Δ={best_ms - ms_center:.3e})")
         return best_x, best_ms
 
     # ---------------- setup ----------------
@@ -698,7 +728,8 @@ def extend_cex_multi_ray(
     best = {"eps": r, "x": xb_var.numpy(), "slack": ms, "class": i_star}
 
     if verbose:
-        print(f"[init] eps_dist={best['eps']:.12g} min_slack={best['slack']:.6g} (class={i_star})")
+        print(
+            f"[init] eps_dist={best['eps']:.12g} min_slack={best['slack']:.6g} (class={i_star})")
 
     optA = tf.keras.optimizers.legacy.Adam(learning_rate=phaseA_lr)
     rounds_since_accept = 0
@@ -725,7 +756,8 @@ def extend_cex_multi_ray(
             i_star = int(np.argmax(model(xb_var, training=False).numpy()[0]))
 
         if verbose:
-            print(f"\n[round {round_idx+1}/{outer_rounds}] start r={r:.12g}, slack={ms:.6g}, i*={i_star}")
+            print(
+                f"\n[round {round_idx+1}/{outer_rounds}] start r={r:.12g}, slack={ms:.6g}, i*={i_star}")
 
         # ---------- Phase A: limiting facet at fixed radius r ----------
         # [NEW] diagnostics accumulators
@@ -757,7 +789,8 @@ def extend_cex_multi_ray(
             g_tan = g - tf.reduce_sum(g * u) * u
 
             # [NEW] apply per-round LR scaling
-            lr_eff = float(np.clip(lr_scale, _PA_LR_MIN / max(phaseA_lr, 1e-20), _PA_LR_MAX))
+            lr_eff = float(np.clip(lr_scale, _PA_LR_MIN /
+                           max(phaseA_lr, 1e-20), _PA_LR_MAX))
             if hasattr(optA, "learning_rate") and isinstance(optA.learning_rate, tf.Variable):
                 optA.learning_rate.assign(phaseA_lr * lr_eff)
 
@@ -778,7 +811,8 @@ def extend_cex_multi_ray(
 
             # [NEW] update LR scale based on backtracks
             if backtracks > 0:
-                lr_scale = max(lr_scale * _PA_DECAY, _PA_LR_MIN / max(phaseA_lr, 1e-20))
+                lr_scale = max(lr_scale * _PA_DECAY,
+                               _PA_LR_MIN / max(phaseA_lr, 1e-20))
             else:
                 lr_scale = min(lr_scale * _PA_RECOVER, _PA_LR_MAX)
 
@@ -791,7 +825,8 @@ def extend_cex_multi_ray(
         z_now = model(xb_var, training=False).numpy()[0]
         ms, j_lim = min_slack_np(z_now, r, i_star)
         if verbose:
-            print(f"[phase A] slack at r={r:.12g}: {ms:.6g} (limiting j={j_lim})")
+            print(
+                f"[phase A] slack at r={r:.12g}: {ms:.6g} (limiting j={j_lim})")
             # [DIAG] report Phase-A stability
             print(f"[diag A] steps={pa_steps}, backtracks(sum/max)={pa_bt_sum}/{pa_bt_max}, "
                   f"lr_scale_end≈{lr_scale:.3f}")
@@ -868,9 +903,11 @@ def extend_cex_multi_ray(
             rounds_since_accept = 0
             accepted_count += 1
             if r > best["eps"]:
-                best.update({"eps": r, "x": xb_var.numpy(), "slack": ms, "class": i_star})
+                best.update({"eps": r, "x": xb_var.numpy(),
+                            "slack": ms, "class": i_star})
             if verbose:
-                print(f"[phase B] accepted r={r:.12g}, slack={ms:.6g} (Δr≥{lo:.3e}, cap≈{dr_cap:.3e})")
+                print(
+                    f"[phase B] accepted r={r:.12g}, slack={ms:.6g} (Δr≥{lo:.3e}, cap≈{dr_cap:.3e})")
                 # [DIAG] summarize guardrail & expansion
                 s0 = float(s_js[0]) if len(s_js) > 0 else float("nan")
                 s1 = float(s_js[1]) if len(s_js) > 1 else float("nan")
@@ -894,9 +931,11 @@ def extend_cex_multi_ray(
                 rounds_since_accept = 0
                 accepted_count += 1
                 if r > best["eps"]:
-                    best.update({"eps": r, "x": xb_var.numpy(), "slack": ms, "class": i_star})
+                    best.update({"eps": r, "x": xb_var.numpy(),
+                                "slack": ms, "class": i_star})
                 if verbose:
-                    print(f"[phase B] accepted r={r:.12g}, slack={ms:.6g} (Δr≈{lo:.3e}, cap≈{dr_cap:.3e})")
+                    print(
+                        f"[phase B] accepted r={r:.12g}, slack={ms:.6g} (Δr≈{lo:.3e}, cap≈{dr_cap:.3e})")
                     # [DIAG] summarize guardrail & expansion
                     s0 = float(s_js[0]) if len(s_js) > 0 else float("nan")
                     s1 = float(s_js[1]) if len(s_js) > 1 else float("nan")
@@ -906,7 +945,8 @@ def extend_cex_multi_ray(
         if accepted and _PB_MICRO_STEPS > 0:
             # ---- micro-polish: short tangential soft-min over current near-limiting set ----
             try:
-                optM = tf.keras.optimizers.legacy.Adam(learning_rate=_PB_MICRO_LR)
+                optM = tf.keras.optimizers.legacy.Adam(
+                    learning_rate=_PB_MICRO_LR)
                 revert = False
                 z_before = model(xb_var, training=False).numpy()[0]
                 ms_before, _ = min_slack_np(z_before, r, i_star)
@@ -914,7 +954,8 @@ def extend_cex_multi_ray(
                 for _ in range(_PB_MICRO_STEPS):
                     # recompute near-limiting set on the new sphere
                     z_pol = model(xb_var, training=False).numpy()[0]
-                    js_pol, _, _ = near_limiting_set(z_pol, r, i_star, K=_PB_TOPK)
+                    js_pol, _, _ = near_limiting_set(
+                        z_pol, r, i_star, K=_PB_TOPK)
                     with tf.GradientTape() as tape:
                         tape.watch(xb_var)
                         logits = model(xb_var, training=False)
@@ -923,7 +964,8 @@ def extend_cex_multi_ray(
                         m_list = [z[i_star] - z[int(jp)] for jp in js_pol]
                         m_stack = tf.stack(m_list)
                         # soft-min: -tau * logsumexp(-m/tau)
-                        mA = -float(soft_tau) * tf.reduce_logsumexp(-m_stack / float(soft_tau))
+                        mA = -float(soft_tau) * \
+                            tf.reduce_logsumexp(-m_stack / float(soft_tau))
                         keep_pen = keep_label_penalty(logits, i_star)
                         lossM = -mA + gamma_keep * keep_pen
                     gM = tape.gradient(lossM, xb_var)
@@ -951,15 +993,18 @@ def extend_cex_multi_ray(
 
                 if verbose:
                     if ms_after >= ms_before:
-                        print(f"[phase B] micro-polish → slack={ms_after:.6g}, j_lim={j_lim}")
+                        print(
+                            f"[phase B] micro-polish → slack={ms_after:.6g}, j_lim={j_lim}")
                     else:
-                        print(f"[phase B] micro-polish reverted (Δslack={ms_after - ms_before:.3e})")
+                        print(
+                            f"[phase B] micro-polish reverted (Δslack={ms_after - ms_before:.3e})")
 
                 # revert if worse
                 if ms_after < ms_before:
                     revert = True
                 if revert:
-                    xb_var.assign(project_to_radius(tf.constant(best["x"], dtype=xb_var.dtype), r))
+                    xb_var.assign(project_to_radius(
+                        tf.constant(best["x"], dtype=xb_var.dtype), r))
                     z_now = model(xb_var, training=False).numpy()[0]
                     ms, j_lim = min_slack_np(z_now, r, i_star)
                 else:
@@ -972,7 +1017,8 @@ def extend_cex_multi_ray(
         else:
             if not accepted:
                 if verbose:
-                    print("[phase B] no feasible radial increase; will try another round.")
+                    print(
+                        "[phase B] no feasible radial increase; will try another round.")
                 rounds_since_accept += 1
             else:
                 # [DIAG] signal that polish was skipped (it's OFF by default here)
@@ -985,9 +1031,11 @@ def extend_cex_multi_ray(
                 print(f"[reseed] try rays at r={r:.3e}, base_slack={ms:.3e}")
             x_new, ms_new = _warmup_single_stage(xb_var, r, i_star, z_now, ms)
             if ms_new > ms + 1e-12 and ms_new >= kappa:
-                xb_var.assign(x_new); ms = ms_new
+                xb_var.assign(x_new)
+                ms = ms_new
                 if verbose:
-                    print(f"[reseed] accepted new seed at same r={r:.3e} with slack={ms:.3e}")
+                    print(
+                        f"[reseed] accepted new seed at same r={r:.3e} with slack={ms:.3e}")
             rounds_since_accept = 0
             reseeds_done += 1
 
@@ -997,9 +1045,9 @@ def extend_cex_multi_ray(
 # =====================================================================================
 # Main loop over dataset
 # =====================================================================================
-log_file="counter_examples.json"
+log_file = "counter_examples.json"
 
-certifier_input="certifier_input.txt"
+certifier_input = "certifier_input.txt"
 
 
 def main():
@@ -1011,10 +1059,10 @@ def main():
     # infer channel shape from model
     want_shape = model.input_shape[1:]
 
-
     if os.path.exists(certifier_input):
         # ask user
-        answer = input(f"{certifier_input} already exists. Overwrite? [y/N]: ").strip().lower()
+        answer = input(
+            f"{certifier_input} already exists. Overwrite? [y/N]: ").strip().lower()
         if answer != "y":
             print("Aborting, not overwriting.")
             exit(1)
@@ -1022,7 +1070,8 @@ def main():
 
     if os.path.exists(log_file):
         # ask user
-        answer = input(f"{log_file} already exists. Overwrite? [y/N]: ").strip().lower()
+        answer = input(
+            f"{log_file} already exists. Overwrite? [y/N]: ").strip().lower()
         if answer != "y":
             print("Aborting, not overwriting.")
             exit(1)
@@ -1077,7 +1126,8 @@ def main():
             # try a few restarts with more steps and increased threshold
             success = False
             for steps_try in [200, 500, 1000]:
-                print(f"Optimising to competitor failed. Re-trying with larger steps {steps_try}...")
+                print(
+                    f"Optimising to competitor failed. Re-trying with larger steps {steps_try}...")
                 x_adv, y_adv, j_star = optimize_to_competitor_deepfool_art(
                     classifier,
                     x_nat,
@@ -1091,7 +1141,8 @@ def main():
                     break
             if not success:
                 # give up on this point
-                print(f"Failed to optimise to competitor for index {idx}. Skipping")
+                print(
+                    f"Failed to optimise to competitor for index {idx}. Skipping")
                 continue
 
         print("Searching for counter-example...")
@@ -1099,17 +1150,17 @@ def main():
         # Refine to an (almost) exact tie along the segment
         x0, x1, cex, max_eps = search_cex(model, x_nat, x_adv, verbose=False)
         if not cex:
-            print("Search did not return a counter-example. Checking the other way around...")
+            print(
+                "Search did not return a counter-example. Checking the other way around...")
             cex, max_eps = check_counter_example(x1, x0, model)
             if not cex:
                 print("Other way around also wasn't a counter-example. Skipping...")
                 continue
             print("Other way around is a counter-example. Swapping x0 and x1.")
             # swap x0 and x1
-            temp=x1
-            x1=x0
-            x0=temp
-
+            temp = x1
+            x1 = x0
+            x0 = temp
 
         print(f"Got counter-example with max_eps {max_eps}!")
 
@@ -1140,7 +1191,8 @@ def main():
         x0_mph = vector_to_mph(x0)
         x1_mph = vector_to_mph(x1)
         dist = l2_norm_mph(x0_mph, x1_mph)
-        print(f"Manually confirmed x0 and x1 such that ||x1-x0||=={dist}, F(x0)=={argmax_y0} but F(x1)=={argmax_y1}")
+        print(
+            f"Manually confirmed x0 and x1 such that ||x1-x0||=={dist}, F(x0)=={argmax_y0} but F(x1)=={argmax_y1}")
         summary = {
             "index": int(idx),
             "true_label": int(y_true),
@@ -1182,7 +1234,7 @@ def main():
                     except Exception:
                         s = str(y1[i])
                     f.write(s)
-                    if i<len(y1)-1:
+                    if i < len(y1)-1:
                         f.write(",")
                 f.write(" ")
                 s = str(radius)
@@ -1210,6 +1262,7 @@ def handle_interrupt(sig, frame):
         f.write("\n]\n")
         f.flush()  # force flush, though buffering=1 already flushes on newline
     sys.exit(1)
+
 
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, handle_interrupt)

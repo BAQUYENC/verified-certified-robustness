@@ -228,7 +228,7 @@ while i < n:
                     if min_fp_norm > l2_norm:
                         min_fp_norm = l2_norm
                 # FIXME: at the moment we are double counting false positives across the different attacks!
-                false_positive = false_positive+1
+                false_positive = false_positive + 1
             else:
                 if l2_norm == 0.0:
                     print("Got a disagreement with a zero norm!")
@@ -255,7 +255,7 @@ while i < n:
                 i_disagree_l2_norm = l2_norm
 
     if i_disagrees:
-        disagree = disagree+1
+        disagree = disagree + 1
 
         # put htis here to only save one counter-example for each test point
         if robustness != []:
@@ -267,7 +267,7 @@ while i < n:
             gloro_said_robust = r["certified"]
 
             if gloro_said_robust:
-                gloro_unsound = gloro_unsound+1
+                gloro_unsound = gloro_unsound + 1
                 if disagree_output_dir is not None:
                     os.makedirs(disagree_output_dir, exist_ok=True)
                 fixed_x = (i_disagree_x * 255).astype(np.uint8).squeeze()
@@ -294,7 +294,7 @@ while i < n:
 
             if robust:
                 # found an attack when the certifier said the output was robust!
-                unsound = unsound+1
+                unsound = unsound + 1
                 if disagree_output_dir is not None:
                     os.makedirs(disagree_output_dir, exist_ok=True)
                 fixed_x = (i_disagree_x * 255).astype(np.uint8).squeeze()

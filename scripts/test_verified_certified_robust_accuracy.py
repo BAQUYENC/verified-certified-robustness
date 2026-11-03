@@ -81,11 +81,11 @@ while i < n:
         robust = r["certified"]
         correct = correct_classifications[j]
         if robust and correct:
-            count_robust_and_correct = count_robust_and_correct+1
+            count_robust_and_correct = count_robust_and_correct + 1
         if robust:
-            count_robust = count_robust+1
+            count_robust = count_robust + 1
         if correct:
-            count_correct = count_correct+1
+            count_correct = count_correct + 1
         if i % 1000 == 0:
             print(f"...done {i} of {n} evaluations...\n")
         j = j + 1

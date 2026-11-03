@@ -69,7 +69,7 @@ def printlist(floatlist):
     n = len(floatlist)
     for num in floatlist:
         mprint(f"{num:.5f}")
-        count = count+1
+        count = count + 1
         if count < n:
             mprint(",")
 

@@ -33,9 +33,9 @@ module MainModule {
       print "<GRAM_ITERATIONS> should be positive";
       return;
     }
-    
+
     print "[\n";
-    
+
     /* ===================== Generate Lipschitz bounds ===================== */
     // Parse neural network from file (unverified).
     var neuralNetStr: string := ReadFromFile(input_file);
@@ -50,13 +50,13 @@ module MainModule {
     print "{\n";
     print "  \"lipschitz_bounds\": ", lipBounds, ",\n";
     print "  \"GRAM_ITERATIONS\": ", GRAM_ITERATIONS, "\n";
-    print "}\n"; 
-    
+    print "}\n";
+
 
     /* ================= Read input vectors from stdin ===================== */
     var inputStr: string := ReadFromFile("/dev/stdin");
 
-    var lines: seq<string> := Split(inputStr, '\n');    
+    var lines: seq<string> := Split(inputStr, '\n');
     if |lines| <= 0 {
       return;
     }
@@ -67,14 +67,14 @@ module MainModule {
     {
       var line := lines[l];
       l := l + 1;
-      var inputSeq: seq<string> := Split(line, ' ');    
+      var inputSeq: seq<string> := Split(line, ' ');
 
       if |inputSeq| != 2 || inputSeq[0] == "" {
         // as soon as we see bad input, stop silently so that the end of the input won't cause junk to be printed
         print "]\n";
         return;
       }
-      
+
       var realsStr: seq<string> := Split(inputSeq[0], ',');
       var areReals: bool := AreReals(realsStr);
       if !areReals {
@@ -82,7 +82,7 @@ module MainModule {
         return;
       }
       var outputVector := ParseReals(realsStr);
-      
+
       // Parse error margin.
       if inputSeq[1] == "" {
         print "Error: The given error margin was found to be empty.\n";
@@ -100,7 +100,7 @@ module MainModule {
       // The given output vector must be compatible with the neural network.
       if |outputVector| != |lipBounds| {
         print "Error: Expected a vector of size ", |lipBounds|,
-          ", but got ", |outputVector|, ".\n";
+              ", but got ", |outputVector|, ".\n";
         return;
       }
       // Use the generated Lipschitz bounds to certify robustness.
@@ -110,8 +110,8 @@ module MainModule {
       output vector, this input-output pair of vectors is robust with respect
       to the given error margin. */
       assert robust ==> forall v: Vector |
-        IsInput(v, neuralNet) && NN(neuralNet, v) == outputVector ::
-        Robust(v, outputVector, errorMargin, neuralNet);
+            IsInput(v, neuralNet) && NN(neuralNet, v) == outputVector ::
+            Robust(v, outputVector, errorMargin, neuralNet);
 
       print ",\n";
       print "{\n";
@@ -130,7 +130,7 @@ module MainModule {
     var readResult := FileIO.ReadBytesFromFile(filename);
     expect readResult.Success?, "Unexpected failure reading from " +
       filename + ": " + readResult.error;
-    str := seq(|readResult.value|, 
-      i requires 0 <= i < |readResult.value| => readResult.value[i] as char);
+    str := seq(|readResult.value|,
+    i requires 0 <= i < |readResult.value| => readResult.value[i] as char);
   }
 }

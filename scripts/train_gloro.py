@@ -52,14 +52,17 @@ def train_gloro(
     # Load data and set up data pipeline.
     _print('loading data...')
 
-    train, test = doitlib.load_gloro_data(batch_size=batch_size,input_size=input_size, dataset=dataset)
-    
-    
+    train, test = doitlib.load_gloro_data(
+        batch_size=batch_size, input_size=input_size, dataset=dataset)
+
     # Create the model.
     _print('creating model...')
 
-    inputs, outputs = doitlib.build_model(Input, Flatten, Dense, input_size=input_size, dataset=dataset, internal_layer_sizes=INTERNAL_LAYER_SIZES)
+    inputs, outputs = doitlib.build_model(
+        Input, Flatten, Dense, input_size=input_size, dataset=dataset, internal_layer_sizes=INTERNAL_LAYER_SIZES)
 
+    # For a CNN, gloro prints a WARNING that it uses 1.0 as the Lipschitz constant of
+    # ZeroPadding2D. That is correct: padding only adds zeros, so distances don't change.
     g = GloroNet(inputs, outputs, epsilon)
 
     if verbose:
@@ -81,9 +84,9 @@ def train_gloro(
         epochs=epochs,
         validation_data=test,
         callbacks=[
-                      EpsilonScheduler(epsilon_schedule),
-                      LrScheduler(lr_schedule),
-                  ] + ([TradesScheduler(trades_schedule)] if trades_schedule else []),
+            EpsilonScheduler(epsilon_schedule),
+            LrScheduler(lr_schedule),
+        ] + ([TradesScheduler(trades_schedule)] if trades_schedule else []),
     )
 
     print('model training done.')
@@ -102,7 +105,7 @@ def script(
         batch_size=128,
         optimizer='adam',
         lr=1e-3,
-        #lr_schedule='decay_to_0.000001',
+        # lr_schedule='decay_to_0.000001',
         lr_schedule='fixed',
         trades_schedule=None,
         plot_learning_curve=False,
@@ -132,14 +135,15 @@ def script(
     final_training_accuracy = g.history.history['sparse_categorical_accuracy'][-1]
 
     # Access the validation accuracy (if validation_data was provided)
-    final_validation_accuracy = g.history.history['val_sparse_categorical_accuracy'][-1]    
+    final_validation_accuracy = g.history.history['val_sparse_categorical_accuracy'][-1]
 
-    print(f'model training accuracy: {final_training_accuracy}; validation accuracy: {final_validation_accuracy}')
-    
+    print(
+        f'model training accuracy: {final_training_accuracy}; validation accuracy: {final_validation_accuracy}')
+
     if plot_learning_curve:
         print('plotting learning curve...')
         history = g.history.history
-    
+
         # learning curve
         # accuracy
         acc = history['sparse_categorical_accuracy']
@@ -172,18 +176,21 @@ def script(
     print('saving model summary...')
     g.summary()
     g.save("model.keras")
-    
-    saved_stdout = sys.stdout    
+
+    saved_stdout = sys.stdout
     with open('gloro.summary', 'w') as sys.stdout:
         g.summary()
-    sys.stdout=saved_stdout
-    
+    sys.stdout = saved_stdout
+
     print('model summary saved.')
 
-    layer_weights = [layer.get_weights()[0] for layer in g.layers if len(layer.get_weights()) > 0]
+    layer_weights = [layer.get_weights()[0]
+                     for layer in g.layers if len(layer.get_weights()) > 0]
 
-    assert (len(layer_weights) == len(INTERNAL_LAYER_SIZES)+1)
-            
+    layers = doitlib.parse_architecture(
+        INTERNAL_LAYER_SIZES, doitlib.datasets[dataset]["num_classes"], input_size)
+    assert (len(layer_weights) == len(layers))
+
     lipschitz_constants = g.lipschitz_constant()
 
     for i, weights in enumerate(layer_weights):
@@ -195,29 +202,32 @@ def script(
         os.makedirs(save_dir)
 
     # Loop through each layer, extract weights and biases, and save them
+    # (a conv kernel, of shape (K, K, C_in, C_out), is saved as a (K*K*C_in) x C_out
+    # matrix, the layout doitlib.load_and_set_weights reads back)
     for i, weights in enumerate(layer_weights):
-        np.savetxt(os.path.join(save_dir, f'layer_{i}_weights.csv'), weights, delimiter=',', fmt='%f')
+        np.savetxt(os.path.join(save_dir, f'layer_{i}_weights.csv'), weights.reshape(
+            -1, weights.shape[-1]), delimiter=',', fmt='%f')
 
     # Loop through each layer, extract weights and biases, and save them
     for i, c in enumerate(lipschitz_constants):
-        np.savetxt(os.path.join(save_dir, f'logit_{i}_gloro_lipschitz.csv'), [c], delimiter=',', fmt='%f')
-        
-    print('model weights extracted.')
+        np.savetxt(os.path.join(save_dir, f'logit_{i}_gloro_lipschitz.csv'), [
+                   c], delimiter=',', fmt='%f')
 
+    print('model weights extracted.')
 
     # compute the model's clean accuracy and robustness (rejection rate) via the gloro methods
     # we need to do these against the evaluation epsilon, which might differ from the training one
     # hence, before running the model to evaluate it we need to tell it the new epsilon value to use
     g.epsilon = eval_epsilon
-    
-    x_test, y_test = doitlib.load_test_data(dataset=dataset,input_size=input_size)
+
+    x_test, y_test = doitlib.load_test_data(
+        dataset=dataset, input_size=input_size)
     y_pred = g.predict(x_test)
     accuracy = float(clean_acc(y_test, y_pred).numpy())
     reject_rate = float(rejection_rate(y_test, y_pred).numpy())
     robustness = 1.0 - reject_rate
     the_vra = float(vra(y_test, y_pred).numpy())
 
-    
     # save the statistics calculated by gloro
     data = {
         "comment": "these statistics are unverified and calculated by the gloro implementation",
@@ -229,24 +239,22 @@ def script(
     }
     file_path = os.path.join(save_dir, "gloro_model_results.json")
 
-    answers=[data]
+    answers = [data]
     bot_index = tf.cast(tf.shape(y_pred)[1] - 1, 'int64')
-    bots=0
+    bots = 0
     preds = tf.argmax(y_pred, axis=1)
     for p in preds:
         answer = {}
         if p == bot_index:
-            bots=bots+1
-            answer["certified"]=False
+            bots = bots + 1
+            answer["certified"] = False
         else:
-            answer["certified"]=True
+            answer["certified"] = True
         answers.append(answer)
 
-    
     with open(file_path, "w") as json_file:
         json.dump(answers, json_file, indent=4)
 
-    
     print("SUMMARY")
     print(f"lr_schedule: {lr_schedule}")
     print(f"epsilon: {epsilon}")
@@ -254,50 +262,51 @@ def script(
     print(f"(gloro) lipschitz constants: {lipschitz_constants}")
     print(f"(gloro) (clean) accuracy: {accuracy}")
     print(f"(gloro) robustness (1 - rejection rate): {robustness}")
-    print(f"(gloro) rejection rate: {reject_rate}")    
+    print(f"(gloro) rejection rate: {reject_rate}")
     print(f"(gloro) VRA: {the_vra}")
-    
+
     # At the end of your script
     K.clear_session()
 
-import sys
 
 if len(sys.argv) != 8:
-    print(f"Usage: {sys.argv[0]} dataset epsilon INTERNAL_LAYER_SIZES epochs batch_size eval_epsilon input_size\n");
+    print(
+        f"Usage: {sys.argv[0]} dataset epsilon INTERNAL_LAYER_SIZES epochs batch_size eval_epsilon input_size\n")
     sys.exit(1)
 
-dataset=sys.argv[1]
+dataset = sys.argv[1]
 
-epsilon=float(sys.argv[2])
-    
-internal_layers=eval(sys.argv[3])
+epsilon = float(sys.argv[2])
 
-epochs=int(sys.argv[4])
+# "[128,128]" or "c(16,2,1).d(10)"; doitlib parses both
+internal_layers = sys.argv[3]
 
-batch_size=int(sys.argv[5])
+epochs = int(sys.argv[4])
 
-eval_epsilon=float(sys.argv[6])
+batch_size = int(sys.argv[5])
 
-input_size=int(sys.argv[7])
+eval_epsilon = float(sys.argv[6])
+
+input_size = int(sys.argv[7])
 
 print(f"Running with internal layer dimensions: {internal_layers}")
 
-if dataset=="cifar10":
-    augmentation="all"
+if dataset == "cifar10":
+    augmentation = "all"
 else:
-    augmentation="none"
+    augmentation = "none"
 
 script(
     dataset=dataset,
     epsilon=epsilon,
     eval_epsilon=eval_epsilon,
-    #epsilon_schedule='[0.01]-log-[50%:1.1]',
+    # epsilon_schedule='[0.01]-log-[50%:1.1]',
     epsilon_schedule='fixed',
     batch_size=batch_size,
     lr=1e-3,
     lr_schedule='decay_to_0.000001',
     epochs=epochs,
-    loss='sparse_crossentropy',    
+    loss='sparse_crossentropy',
     augmentation=augmentation,
     INTERNAL_LAYER_SIZES=internal_layers,
     input_size=input_size)

@@ -2,6 +2,7 @@ include "IO/FileIO.dfy"
 include "parsing.dfy"
 include "linear_algebra.dfy"
 include "neural_networks.dfy"
+include "convolution.dfy"
 include "operator_norms.dfy"
 include "robustness_certification.dfy"
 
@@ -10,6 +11,7 @@ module MainModule {
   import opened Parsing
   import opened LinearAlgebra
   import opened NeuralNetworks
+  import opened Convolution
   import opened OperatorNorms
   import opened RobustnessCertification
 
@@ -18,8 +20,8 @@ module MainModule {
   {
     /* =================== Parse command line arguments ==================== */
     // parse command line arguments
-    if |args| != 3 {
-      print "Usage: main <neural_network_input.txt> <GRAM_ITERATIONS>\n";
+    if |args| != 3 && |args| != 4 {
+      print "Usage: main <neural_network_input.txt> <GRAM_ITERATIONS> [<CONV_ITERATIONS>]\n";
       return;
     }
     var input_file: string := args[1];
@@ -34,21 +36,48 @@ module MainModule {
       return;
     }
 
+    // Gram iterations on each convolutional layer's filter (Algorithm 3,
+    // norm2_toep, of Delattre et al. 2024). The filter grows at each iteration,
+    // so by default there are at most 3.
+    var CONV_ITERATIONS: int := if GRAM_ITERATIONS < 3 then GRAM_ITERATIONS else 3;
+    if |args| == 4 {
+      if !IsInt(args[3]) {
+        print "<CONV_ITERATIONS> should be a positive integer";
+        return;
+      }
+      CONV_ITERATIONS := ParseInt(args[3]);
+      if CONV_ITERATIONS <= 0 {
+        print "<CONV_ITERATIONS> should be positive";
+        return;
+      }
+    }
+
     print "[\n";
 
     /* ===================== Generate Lipschitz bounds ===================== */
-    // Parse neural network from file (unverified).
+    // Parse the neural network, dense or convolutional, from file (unverified).
     var neuralNetStr: string := ReadFromFile(input_file);
-    var maybeNeuralNet: Maybe<NeuralNetwork> := ParseNeuralNet(neuralNetStr);
-    expect maybeNeuralNet.Some?, "Failed to parse neural network.";
-    var neuralNet: NeuralNetwork := maybeNeuralNet.val;
-    // Generate spectral norms for the matrices comprising the neural net.
-    var specNorms: seq<real> := GenerateSpecNorms(neuralNet, GRAM_ITERATIONS);
+    var maybeCNN: Maybe<seq<CNNLayer>> := ParseCNN(neuralNetStr);
+    expect maybeCNN.Some?, "Failed to parse neural network.";
+    var cnn: seq<CNNLayer> := maybeCNN.val;
+    // The network as a CAV 2025 NeuralNetwork: each convolutional layer is its
+    // banded doubly block Toeplitz matrix. Ghost, so it is never built.
+    ghost var neuralNet: NeuralNetwork := CNNToNeuralNetwork(cnn);
+    // Generate spectral norms for the layers comprising the neural net.
+    var specNorms: seq<real> := GenerateCNNSpecNorms(cnn, GRAM_ITERATIONS, CONV_ITERATIONS);
     // Generate the margin Lipschitz bounds for each pair of logits in the output vector.
-    var lipBounds: Matrix := GenMarginBounds(neuralNet, specNorms);
+    var lipBounds: Matrix := GenMarginBoundsFromLastLayer(neuralNet, cnn[|cnn|-1].W, specNorms);
 
     print "{\n";
     print "  \"lipschitz_bounds\": ", lipBounds, ",\n";
+    // Per-layer bounds, in layer order. Verification guarantees that bound i is
+    // at least the spectral norm of layer i's matrix (for a conv layer, its
+    // banded doubly block Toeplitz matrix).
+    assert forall i | 0 <= i < |neuralNet| :: IsSpecNormUpperBound(specNorms[i], neuralNet[i]);
+    print "  \"spectral_norm_bounds\": ", specNorms, ",\n";
+    if exists i | 0 <= i < |cnn| :: cnn[i].Conv? {
+      print "  \"CONV_ITERATIONS\": ", CONV_ITERATIONS, ",\n";
+    }
     print "  \"GRAM_ITERATIONS\": ", GRAM_ITERATIONS, "\n";
     print "}\n";
 

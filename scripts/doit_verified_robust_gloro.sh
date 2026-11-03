@@ -219,7 +219,7 @@ if [[ "$TRAINING" ]]; then
     # make the outputs from the zero-bias model
     ${PYTHON} zero_bias_saved_model.py "$DATASET" "$INTERNAL_LAYER_SIZES" "$MODEL_WEIGHTS_DIR" "$MODEL_OUTPUTS" $INPUT_SIZE
     # make the neural net in a form the certifier can understand
-    ${PYTHON} make_certifier_format.py "$INTERNAL_LAYER_SIZES" "$MODEL_WEIGHTS_DIR" > "$NEURAL_NET_FILE"
+    ${PYTHON} make_certifier_format.py "$INTERNAL_LAYER_SIZES" "$MODEL_WEIGHTS_DIR" "$DATASET" $INPUT_SIZE > "$NEURAL_NET_FILE"
     # add the epsilon to each model output for the certifier to certify against
     sed "s/$/ ${EVAL_EPSILON}/" "$MODEL_OUTPUTS" > "$MODEL_OUTPUTS_EVAL"    
 else
@@ -282,10 +282,9 @@ echo "Parameters saved in: ${PARAMS_FILE}, whose contents follows:"
 cat "$PARAMS_FILE"
 echo ""
 echo "Model weights and (unverified) gloro lipschitz constants saved in: ${MODEL_WEIGHTS_DIR}"
-echo "(Unverified) gloro model statistics saved in: ${MODEL_WEIGHTS_DIR}/gloro_model_stats.json"
+echo "(Unverified) gloro model statistics saved in: ${MODEL_WEIGHTS_DIR}/gloro_model_results.json"
 echo "Model outputs saved in: ${MODEL_OUTPUTS}"
 echo "Neural network (for certifier) saved in: ${NEURAL_NET_FILE}"
 echo "Model outputs for evaluation saved in: ${MODEL_OUTPUTS_EVAL}"
 echo "Certified robustness results saved in: ${RESULTS_JSON}"
 echo "Timestamped certifier output saved in: ${RESULTS_JSON}.timestamps"
-

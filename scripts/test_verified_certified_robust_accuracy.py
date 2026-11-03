@@ -88,8 +88,8 @@ while i < n:
             count_correct = count_correct+1
         if i % 1000 == 0:
             print(f"...done {i} of {n} evaluations...\n")
-        j = j+1
-    i = i+1
+        j = j + 1
+    i = i + 1
 
 assert j == 10000
 assert i >= 10000

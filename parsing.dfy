@@ -1,11 +1,13 @@
 include "basic_arithmetic.dfy"
 include "linear_algebra.dfy"
 include "neural_networks.dfy"
+include "convolution.dfy"
 
 module Parsing {
   import opened BasicArithmetic
   import opened LinearAlgebra
   import opened NeuralNetworks
+  import opened Convolution
 
   datatype Maybe<T> = None | Some(val: T)
 
@@ -232,6 +234,171 @@ module Parsing {
     }
     var neuralNet: NeuralNetwork := matrices;
     return Some(neuralNet);
+  }
+
+  /* ========================================================================== */
+  /* =========================== CNN Parser (new) ============================= */
+  /* ========================================================================== */
+
+  /**
+    * Parses the network file that make_certifier_format.py writes: the layers in
+    * order, separated by commas. A dense layer is a matrix with one row per input,
+    * transposed here as in ParseNeuralNet. A conv layer is
+    * conv(cIn,n,cOut,k,stride,pad) followed by its kernel: one row per output
+    * channel o, listing K[o][c][a][b] by input channel c, then kernel row a, then
+    * kernel column b. A file with dense layers only (CAV 2025) is a CNN too.
+    * Returns None unless the layers form a CNN. Like ParseNeuralNet, it is not
+    * verified to read the file correctly.
+    */
+  method ParseCNN(xs: string) returns (t: Maybe<seq<CNNLayer>>)
+    ensures t.Some? ==> IsCNN(t.val)
+  {
+    var layers: seq<CNNLayer> := [];
+    var i := 0;
+    while i < |xs|
+      decreases |xs| - i
+    {
+      var header: seq<nat> := [];
+      if i + 5 <= |xs| && xs[i..i+5] == "conv(" {
+        var j := i + 5;
+        while j < |xs| && xs[j] != ')'
+          invariant i + 5 <= j <= |xs|
+          decreases |xs| - j
+        {
+          j := j + 1;
+        }
+        if j == |xs| {
+          return None;
+        }
+        var fields := Split(xs[i+5..j], ',');
+        var maybeHeader := ParseNats(fields);
+        if maybeHeader.None? || |maybeHeader.val| != 6 {
+          return None;
+        }
+        header := maybeHeader.val;
+        i := j + 1;
+      }
+      var maybeMatrix, next := ParseMatrix(xs, i);
+      if maybeMatrix.None? {
+        return None;
+      }
+      var m := maybeMatrix.val;
+      if header == [] {
+        var w := TransposeImpl(m); // need to transpose for comptability with python output
+        layers := layers + [Dense(w)];
+      } else {
+        var cIn, n, cOut, k, stride, pad := header[0], header[1], header[2], header[3], header[4], header[5];
+        if Cols(m) != cIn * k * k {
+          return None;
+        }
+        layers := layers + [Conv(ConvLayer(Kernel(m, cIn, k), cIn, n, cOut, k, stride, pad))];
+      }
+      i := next;
+    }
+    if !IsCNN(layers) {
+      return None;
+    }
+    return Some(layers);
+  }
+
+  /**
+    * Parses the matrix "[[r,...,r],...,[r,...,r]]" that starts at xs[i], as
+    * ParseNeuralNet does. next is the index after it and the comma that follows.
+    */
+  method ParseMatrix(xs: string, i: nat) returns (m: Maybe<Matrix>, next: nat)
+    ensures next > i
+  {
+    next := i + 1;
+    if i + 2 > |xs| || xs[i..i+2] != "[[" {
+      return None, next;
+    }
+    var j := i + 2;
+    while xs[j-2..j] != "]]"
+      invariant i + 2 <= j <= |xs|
+      decreases |xs| - j
+    {
+      if j >= |xs| {
+        return None, next;
+      }
+      j := j + 1;
+    }
+    // xs[i..j] == "[[...],...,[...]]"
+    var ys := xs[i+1..j-1];
+    // ys == "[...],...,[...]"
+    var k := 0;
+    var vectors: seq<Vector> := [];
+    while k < |ys|
+      decreases |ys| - k
+    {
+      // Expect vector
+      if ys[k] != '[' {
+        return None, next;
+      }
+      var l := k;
+      while ys[l] != ']'
+        invariant k <= l < |ys|
+        decreases |ys| - l
+      {
+        if l + 1 >= |ys| {
+          return None, next;
+        }
+        l := l + 1;
+      }
+      // ys[k..l] == "[r1,r2,...,rn"
+      var realsStr: seq<string> := Split(ys[k+1..l], ',');
+      var areReals: bool := AreReals(realsStr);
+      if !areReals {
+        return None, next;
+      }
+      var v: seq<real> := ParseReals(realsStr);
+      if |v| == 0 {
+        return None, next;
+      }
+      vectors := vectors + [v];
+      k := l + 2; // skip comma
+    }
+    var matrixWellFormed := IsMatrixWellFormed(vectors);
+    if !matrixWellFormed {
+      return None, next;
+    }
+    return Some(vectors), j + 1; // xs[j] == ',' or EOF
+  }
+
+  /** Parses each string as a natural number. */
+  method ParseNats(strs: seq<string>) returns (r: Maybe<seq<nat>>)
+  {
+    var nats: seq<nat> := [];
+    for i := 0 to |strs| {
+      if !IsInt(strs[i]) {
+        return None;
+      }
+      var x := ParseInt(strs[i]);
+      if x < 0 {
+        return None;
+      }
+      nats := nats + [x];
+    }
+    return Some(nats);
+  }
+
+  /** The kernel K[o][c][a][b] from its rows: K[o][c][a][b] == rows[o][(c*k + a)*k + b]. */
+  function Kernel(rows: Matrix, cIn: nat, k: nat): seq<seq<seq<seq<real>>>>
+    requires Cols(rows) == cIn * k * k
+  {
+    seq(|rows|, o requires 0 <= o < |rows| =>
+      seq(cIn, c requires 0 <= c < cIn =>
+        seq(k, a requires 0 <= a < k =>
+          seq(k, b requires 0 <= b < k =>
+            KernelIndex(cIn, k, c, a, b);
+            rows[o][(c * k + a) * k + b]))))
+  }
+
+  lemma KernelIndex(cIn: nat, k: nat, c: nat, a: nat, b: nat)
+    requires c < cIn && a < k && b < k
+    ensures (c * k + a) * k + b < cIn * k * k
+  {
+    MulMono(c + 1, cIn, k);
+    MulMono(c * k + a + 1, cIn * k, k);
   }
 
   method IsNeuralNetWellFormed(n: seq<Matrix>) returns (b: bool)

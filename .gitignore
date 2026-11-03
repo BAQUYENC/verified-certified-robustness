@@ -9,3 +9,13 @@ main
 obj/
 ref/
 .DS_Store
+.venv/
+
+# experiment run directories: archive them instead (without neural_net_*.txt,
+# which make_certifier_format.py can regenerate)
+scripts/20*-*/
+scripts/cav2025-rerun/
+# left in scripts/ by train_gloro.py and by Python
+scripts/layer_*_weights.npz
+scripts/gloro.summary
+__pycache__/

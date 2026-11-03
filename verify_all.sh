@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # check for Dafny and Z3
 
 DAFNY_VERSION="4.9.0"
@@ -28,7 +29,7 @@ fi
 
 Z3_PATH=$(which z3)
 
-FILES=(basic_arithmetic linear_algebra main neural_networks parsing robustness_certification l2_extra)
+FILES=(basic_arithmetic convolution l2_extra linear_algebra main neural_networks parsing robustness_certification)
 ISOLATE_ASSERTIONS_FILES=(operator_norms)
 
 # check we are not going to miss any files

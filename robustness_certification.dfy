@@ -93,19 +93,29 @@ module RobustnessCertification {
     r := SqrtUpperBound(r);
   }
 
-  method GenMarginBound(n: NeuralNetwork, p: nat, q: nat, s: seq<real>) returns (r: real)
+  /**
+    * CNN extension: the network n is now a ghost parameter. At runtime only the
+    * last (dense) layer `last` and the per-layer spectral-norm bounds `s` are
+    * needed. A zero-padded convolutional layer can therefore appear in n as its
+    * banded doubly block Toeplitz matrix (Delattre et al. 2024, Sec. V-B), which
+    * is never built at runtime.
+    */
+  method GenMarginBound(ghost n: NeuralNetwork, last: Matrix, p: nat, q: nat, s: seq<real>) returns (r: real)
     requires P1: |s| == |n|
     requires P2: p < |n[|n|-1]|
     requires P3: q < |n[|n|-1]|
     requires P4: forall i: nat | i < |s| :: IsSpecNormUpperBound(s[i], n[i])
+    requires P5: last == n[|n|-1]
     ensures IsMarginLipBound(n, r, p, q)
     ensures r >= 0.0
   {
     reveal P1;
     reveal P2;
     reveal P3;
-    var i := |n| - 1;
-    var d: Vector := MinusImpl(n[i][q], n[i][p]);
+    reveal P5;
+    var i := |s| - 1;      // |n| is ghost, so use |s| (== |n|, by P1) at runtime
+    assert i == |n| - 1;   // proof hint: i is the last layer's index, as in the original `var i := |n| - 1`
+    var d: Vector := MinusImpl(last[q], last[p]);
     var m: Matrix := [d];
     r := L2UpperBound(d);
     L2IsSpecNormUpperBound(r, m);
@@ -495,6 +505,11 @@ module RobustnessCertification {
     }
   }
 
+  /**
+    * Original CAV 2025 entry point for dense networks. Its signature is unchanged
+    * so main.dfy and the dense pipeline keep working; it now delegates to
+    * GenMarginBoundsFromLastLayer.
+    */
   method GenMarginBounds(n: NeuralNetwork, s: seq<real>) returns (r: Matrix)
     requires P1: |s| == |n|
     requires P2: forall i: nat | i < |s| :: IsSpecNormUpperBound(s[i], n[i])
@@ -503,9 +518,30 @@ module RobustnessCertification {
     ensures AreMarginLipBounds(n, r)
   {
     reveal P1;
+    reveal P2;
+    r := GenMarginBoundsFromLastLayer(n, n[|n|-1], s);
+  }
+
+  /**
+    * CNN extension: same as GenMarginBounds, but the network n is ghost. At
+    * runtime only the last (dense) layer and the per-layer bounds are used, so a
+    * zero-padded convolutional layer can be modelled as a ghost banded doubly
+    * block Toeplitz matrix whose bound comes from Algorithm 3 (norm2_toep) of
+    * Delattre et al. (2024).
+    */
+  method GenMarginBoundsFromLastLayer(ghost n: NeuralNetwork, last: Matrix, s: seq<real>) returns (r: Matrix)
+    requires P1: |s| == |n|
+    requires P2: forall i: nat | i < |s| :: IsSpecNormUpperBound(s[i], n[i])
+    requires P3: last == n[|n|-1]
+    ensures |r| == |r[0]| == |n[|n|-1]|
+    ensures forall p: nat, q: nat | p < |r| && q < |r[0]| :: 0.0 <= r[p][q]
+    ensures AreMarginLipBounds(n, r)
+  {
+    reveal P1;
+    reveal P3;
     var r': seq<seq<real>> := [];
     var p: nat := 0;
-    while p < |n[|n|-1]|
+    while p < |last|
       // proportions
       invariant p <= |n[|n|-1]|
       invariant |r'| == p
@@ -515,7 +551,7 @@ module RobustnessCertification {
     {
       var p_bounds: seq<real> := [];
       var q: nat := 0;
-      while q < |n[|n|-1]|
+      while q < |last|
         // proportions
         invariant q <= |n[|n|-1]|
         invariant |p_bounds| == q
@@ -523,7 +559,7 @@ module RobustnessCertification {
         invariant forall i: nat | i < q :: IsMarginLipBound(n, p_bounds[i], p, i) && 0.0 <= p_bounds[i]
       {
         reveal P2;
-        var bound: real := GenMarginBound(n, p, q, s);
+        var bound: real := GenMarginBound(n, last, p, q, s);
         assert 0.0 <= bound;
         assert IsMarginLipBound(n, bound, p, q);
         assert forall i: nat | i < |p_bounds| :: IsMarginLipBound(n, p_bounds[i], p, i) && 0.0 <= p_bounds[i];

@@ -55,7 +55,7 @@ ax1.set_ylim(0.0, 100.0)
 ax1.set_xlim(x.min(), x.max())
 # Gram iterations are whole numbers: tick only the counts that were run
 ax1.set_xticks(x)
-ax1.set_xlabel("Gram Iterations")
+ax1.set_xlabel("Gram Iterations (Dense Layers)")
 ax1.tick_params(axis='y', labelcolor="blue")
 ax1.set_ylabel(ylabel)
 

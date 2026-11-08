@@ -16,7 +16,7 @@
 #                       Gram iterations (default: the MODEL's own)
 #   setup-cav MODEL     copy a CAV 2025 model out of ../cav2025-models.zip and
 #                       export it again with today's make_certifier_format.py
-# MODEL: smoke, 2c2f, 4c3f, 6c2f, gloro2c2f, cav-mnist or cav-cifar10.
+# MODEL: smoke, 2c2f, 4c3f, 6c2f, cav-mnist or cav-cifar10.
 # Set CERTIFIER to use a certifier other than ../main.
 
 set -eo pipefail
@@ -55,9 +55,6 @@ case "$MODEL" in
     6c2f)
         DATASET=cifar10 TRAIN_EPS=0.1551 EVAL_EPS=0.141 EPOCHS=800 BATCH=256 INPUT=32 GRAM=6 PGD_ITERS=500
         ARCH="c(32,2,1).c(32,2,1).c(32,2,1).c(64,2,1).c(64,2,1).c(2,2,1).d(512).d(10)" ;;
-    gloro2c2f) # optional: Leino et al.'s own 2C2F (stride 2, 1 zero of padding)
-        DATASET=mnist TRAIN_EPS=0.45 EVAL_EPS=0.3 EPOCHS=500 BATCH=256 INPUT=28 GRAM=6 PGD_ITERS=500
-        ARCH="c(16,4,2,1).c(32,4,2,1).d(100).d(10)" ;;
     cav-mnist) # the CAV 2025 dense models, as in the top-level README.md
         DATASET=mnist TRAIN_EPS=0.45 EVAL_EPS=0.3 EPOCHS=500 BATCH=32 INPUT=28 GRAM=11 PGD_ITERS=500
         ARCH="[128,128,128,128,128,128,128,128]" CAV_NAME="2025-01-25_09:27:46-mnist" ;;

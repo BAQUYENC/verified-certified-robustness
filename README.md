@@ -1,541 +1,360 @@
 # A Formally Verified Robustness Certifier for Neural Networks
 
-## CAV 2025 Artifact
+This is the robustness certifier of CAV 2025 (Tobler, Syeda and Murray),
+written and verified in Dafny, extended to convolutional neural networks (CNNs)
+with zero-padded convolutional layers and set up to run on Apple silicon
+(arm64) Macs. It still reproduces the CAV 2025 results for dense networks.
 
-The artifact is packaged as a Docker container, which is known to work
-on x86-64 hosts. (Unfortunately, virtualisation failures seem to prevent
-the container working on ARM-based hosts like Apple M1 etc.)
+- [A Formally Verified Robustness Certifier for Neural Networks](#a-formally-verified-robustness-certifier-for-neural-networks)
+  - [Setting up](#setting-up)
+    - [Docker on x86-64](#docker-on-x86-64)
+    - [Apple silicon, natively](#apple-silicon-natively)
+    - [Apple silicon, in Docker](#apple-silicon-in-docker)
+  - [Verifying and building the certifier](#verifying-and-building-the-certifier)
+  - [Running the certifier](#running-the-certifier)
+    - [Input format](#input-format)
+  - [Reproducing the CAV 2025 results](#reproducing-the-cav-2025-results)
+    - [Table 1](#table-1)
+    - [Figure 8](#figure-8)
+  - [The CNN extension](#the-cnn-extension)
+  - [CNN experiments](#cnn-experiments)
+    - [Architectures](#architectures)
+    - [Results](#results)
 
-### Artifact Resource Requirements
+## Setting up
 
-An x86-64 based machine is required, with Docker. Experiments and
-results replicated below were carried out on machines with 16GB RAM.
+Verifying and building the certifier needs Dafny 4.9.0, Z3 4.13.4 and a .NET
+SDK. The scripts need Python with TensorFlow 2.13 and gloro. The CAV 2025
+Docker container provides all of these on x86-64 hosts, but does not work on
+ARM hosts: on Apple silicon, set up natively or build an arm64 container. The
+experiments ran on machines with 16 GB of memory.
 
-
-### Artifact Set Up
-
-Load and enter the Docker container:
+### Docker on x86-64
 
 ```
 gunzip cav2025-artifact.tar.gz
 docker image load < cav2025-artifact.tar
 docker run -it cav2025-artifact:latest bash
-
-```
-
-Enter the Python virtual environment used for Python scripts that train
-and use the ML models used in the paper's evaluation:
-```
 source cav2025-artifact/bin/activate
 ```
 
-## Artifact Structure
+The container's `/workspace` holds `robustness-verifier/` (this repository),
+`cav2025-artifact/` (the Python virtual environment), `cav2025-models/` (the
+paper's three models and their result files) and `gloro/`.
 
-The artifact has the following directory structure, and is located in the
-`/workspace` directory of the container's filesystem:
-* `robustness-verifier/` - the verified robustness certifier
-* `cav2025-artifact/` - the artifact's Python virtual environment directory
-* `cav2025-models/` - the three models used in the paper's evaluation
-* `gloro/` - Leino et al.'s globally robust neural networks implementation
+### Apple silicon, natively
 
-## Claims / Results supported by this Artifact
+Install a .NET SDK, Dafny 4.9.0, Z3 4.13.4, `ts` (in moreutils), `jq` and
+Python 3.11. Homebrew's `dafny` and `z3` are newer than `verify_all.sh`
+accepts.
 
-1. Our certifier is formally verified againt the specifications as described in the paper
-2. The performance results of our certifier on the ML models in the paper (Table 1)
-3. The performance results of our certifier on the ML models in the paper (Figure 8)
-
-
-## Claim 1: Verifying and Building the Certifier
-
-### Verifying the Certifier (will take up to 1--2 minutes)
-
-To get Dafny to verify the certifier, run these commands:
 ```
-cd robustness-verifier
+brew install --cask dotnet-sdk
+brew install moreutils jq python@3.11
+dotnet tool install --global dafny --version 4.9.0 --allow-roll-forward
+mkdir -p ~/tools && cd ~/tools
+curl -LO https://github.com/Z3Prover/z3/releases/download/z3-4.13.4/z3-4.13.4-arm64-osx-13.7.1.zip
+unzip z3-4.13.4-arm64-osx-13.7.1.zip && xattr -dr com.apple.quarantine z3-4.13.4-arm64-osx-13.7.1
+echo 'export PATH="$HOME/.dotnet/tools:$HOME/tools/z3-4.13.4-arm64-osx-13.7.1/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+dafny --version && z3 --version
+```
+
+Then, in this repository's directory, create the virtual environment `.venv`:
+
+```
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install tensorflow==2.13.0 numpy==1.24.3 tensorflow-metadata==1.17.0 tensorflow_datasets matplotlib scikit-learn pandas mpmath adversarial-robustness-toolbox==1.19.1
+git clone https://github.com/klasleino/gloro /tmp/gloro
+(cd /tmp/gloro && git checkout a218dcdaaa41951411b0d520581e96e7401967d7 && pip install --no-deps .)
+rm -rf /tmp/gloro
+pip check
+```
+
+The pinned versions matter:
+
+- `tensorflow==2.13.0` installs `tensorflow-macos`. pip does not count that as
+  the `tensorflow` that gloro requires, so install gloro with `--no-deps`, or
+  pip adds a newer TensorFlow with Keras 3.
+- `numpy==1.24.3` is the newest numpy that TensorFlow 2.13 accepts.
+- `tensorflow-metadata==1.17.0` needs protobuf 4.25, the newest that
+  TensorFlow 2.13 accepts. Newer releases need protobuf 6 and break
+  `tensorflow_datasets`.
+- `adversarial-robustness-toolbox==1.19.1` is the release that the CAV 2025
+  artifact used. ART 1.20.0 needs Keras 3 and breaks `run_pgd_attack.py`.
+
+Finally, unzip the models into this repository's parent directory
+(`unzip cav2025-models.zip -d ..`), and use `.venv` wherever the instructions
+below say `cav2025-artifact`.
+
+### Apple silicon, in Docker
+
+In this repository's directory, which holds `cav2025-models.zip`, build and
+enter an arm64 container. It has the CAV 2025 container's layout, with .NET 10,
+Dafny 4.9.0 and Z3 4.13.4.
+
+```
+docker build -t cav2025-artifact:arm64 .
+docker run -it cav2025-artifact:arm64 bash
+source cav2025-artifact/bin/activate
+```
+
+For larger models, raise Docker Desktop's memory limit (Settings > Resources).
+
+## Verifying and building the certifier
+
+In `robustness-verifier/` (this repository's directory, outside the container),
+run:
+
+```
 ./verify_all.sh
 ```
 
-This should produce output like the following, showing that each file of the
-certifier's Dafny implementation was verified:
+Every file should verify with 0 errors. This takes about a minute (58 s on an
+M1 MacBook Air).
+
+| File                                               | Verified |
+| -------------------------------------------------- | -------- |
+| `basic_arithmetic.dfy`                             | 52       |
+| `convolution.dfy`                                  | 68       |
+| `l2_extra.dfy`                                     | 4        |
+| `linear_algebra.dfy`                               | 96       |
+| `main.dfy`                                         | 2        |
+| `neural_networks.dfy`                              | 10       |
+| `parsing.dfy`                                      | 37       |
+| `robustness_certification.dfy`                     | 44       |
+| `operator_norms.dfy` (with `--isolate-assertions`) | 2,300    |
+
+The verified property is soundness: the certifier says that an output is robust
+only if it is. `main.dfy` asserts it after each call to `CertifyMargin`:
 
 ```
-dafny verify basic_arithmetic.dfy --solver-path "/opt/z3-4.13.4-x64-glibc-2.35/bin/z3"
-
-Dafny program verifier finished with 52 verified, 0 errors
-dafny verify linear_algebra.dfy --solver-path "/opt/z3-4.13.4-x64-glibc-2.35/bin/z3"
-
-Dafny program verifier finished with 96 verified, 0 errors
-dafny verify main.dfy --solver-path "/opt/z3-4.13.4-x64-glibc-2.35/bin/z3"
-
-Dafny program verifier finished with 2 verified, 0 errors
-dafny verify neural_networks.dfy --solver-path "/opt/z3-4.13.4-x64-glibc-2.35/bin/z3"
-
-Dafny program verifier finished with 10 verified, 0 errors
-dafny verify parsing.dfy --solver-path "/opt/z3-4.13.4-x64-glibc-2.35/bin/z3"
-
-Dafny program verifier finished with 31 verified, 0 errors
-dafny verify robustness_certification.dfy --solver-path "/opt/z3-4.13.4-x64-glibc-2.35/bin/z3"
-
-Dafny program verifier finished with 42 verified, 0 errors
-dafny verify l2_extra.dfy --solver-path "/opt/z3-4.13.4-x64-glibc-2.35/bin/z3"
-
-Dafny program verifier finished with 4 verified, 0 errors
-dafny verify operator_norms.dfy --isolate-assertions --solver-path "/opt/z3-4.13.4-x64-glibc-2.35/bin/z3"
-
-Dafny program verifier finished with 680 verified, 0 errors
+assert robust ==> forall v: Vector |
+  IsInput(v, neuralNet) && NN(neuralNet, v) == outputVector ::
+  Robust(v, outputVector, errorMargin, neuralNet);
 ```
 
-### The Top-Level Specification Being Verified
+`Robust` is defined in `robustness_certification.dfy` (CAV 2025, Section 4.4),
+and `IsInput` and `NN` in `neural_networks.dfy` (Sections 4.1 and 4.2, where
+`NN` is called ApplyNN). For a CNN, `neuralNet` is the ghost network
+`CNNToNeuralNetwork(cnn)`, so
+the guarantee covers CNNs unchanged (see [The CNN extension](#the-cnn-extension)).
 
-The claim that the formal verification establishes is that our certifier says that an
-output is robust only if it is robust (i.e. soundness). This is formally
-specifid in the top-level Dafny file for our certifire `main.dfy` on lines 106--125.
-Specifically, note the following in this section of the source code of `main.dfy`:
-```
-      var robust: bool := CertifyMargin(outputVector, errorMargin, lipBounds);
-      /* Verification guarantees that 'true' is only printed when for all input
-      vectors v where applying the neural network to v results in the given
-      output vector, this input-output pair of vectors is robust with respect
-      to the given error margin. */
-      assert robust ==> forall v: Vector |
-        IsInput(v, neuralNet) && NN(neuralNet, v) == outputVector ::
-        Robust(v, outputVector, errorMargin, neuralNet);
-```
-Here, the boolean variable `robust` tracks whether the certifier believes the
-`outputVector` is robust for perturbation bound `errorMargin`. The subsequent
-`assert` statement (which is verified by Dafny when verifying `main.dfy`)
-ensures that whenever `robust` is true (the certifier believes the output
-is robust), the output is actually robust for perturbation bound `errorMargin`.
+To build the certifier binary `main`, run:
 
-The definition of `Robust` is in `robustness_certification.dfy` (line 23),
-and is described in the paper in Section 3.4.
-
-The definition of `IsInput` is in `neural_networks.dfy` (line 24), and is
-described in the paper in Section 3.1.
-
-The definition of `NN` is in `neural_networks.dfy` (line 64), and is
-described in the paper in Section 3.2, where it is called "ApplyNN".
-
-
-### Building the Certifier (will take up to about a minute)
-
-To build the certifier binary, in the `robustness-verifier/` directory, run:
 ```
 dafny build --unicode-char:false --target:cs main.dfy IO/FileIO.cs
 ```
 
-This should produce the executable `main`, which is the main certifier binary.
+The first build downloads NuGet packages. The generated C# project targets
+.NET 6 and rolls forward to a newer installed .NET.
 
-If you run the certifier binary, it will produce basic usage information:
-```
-Usage: main <neural_network_input.txt> <GRAM_ITERATIONS>
-```
-
-Its first argument is the name of a text file containing the neural network weights
-in a custom, textual format. The second argument is the number of gram iterations
-to run, when computing Lipschitz bounds. Higher numbers of gram iterations causes
-the certifier to run for longer, but produce tighter (and thus less conservative)
-robustness certifications. For neural networks of the order evaluated in the paper,
-12 gram iterations produces sufficiently tight Lipschitz bounds.
-
-The certifier produces output in JSON format (simply to aid its automated evaluation
-for this research). This output includes lots of debugging messages.
-
-It first computes Lipschitz bounds before then accepting input vectors on `stdin`.
-Its output certifies each input vector against a given perturbation radius.
-
-The certifier's input format is explained later, below.
-
-
-
-## Claim 2: Reproducing the Paper's Performance Evaluation (Table 1)
-
-The main results of the performance evaluation appear in Table 1 of the paper,
-where we apply our certifier to three ML models: MNIST, Fashion MNIST, and CIFAR-10.
-
-Naturally, depending on the performance of your machine, the time taken
-to reproduce these results could be longer than the times indicated below.
-This also means, of course, that the results you obtain in terms of
-certifier running time could be significantly different to those reported
-in our paper or below.
-
-Figure 8 (the performance plot) also graphically depicts performance results
-on the MNIST model. See below for steps to reproduce that (Claim 3).
-
-The `scripts/` subdirectory of `robustness-verifier/` contains scripts that can
-be used to reproduce the evaluation results.
-
-Before running these scripts, you need to have built the certifier (see above).
-
-### ML Models and Result Files
-
-These scripts produce a lot of data files. The `cav2025-models/` directory
-contains copies of the three ML models used in the paper's evaluation, as well
-as the data files produced from that evaluation.
-
-The models appear in Table 1 of the paper and their corresponding locations
-in the `cav2025-models/` directory are:
-
-* MNIST (row 1): `2025-01-25_09:27:46-mnist/`
-* Fashion MNIST (row 2): `2025-01-30_10:58:01-fashion_mnist/`
-* CIFAR-10 (row 3): `2025-01-28_20:39:32-cifar10/`
-
-### Main Evaluation Script
-
-The main evaluation script in the `robustness-verifier/scripts/` directory is called
-`doit_verified_robust_gloro.sh`. To reproduce the results in Table 1 this script can
-be run.
-
-It takes many arguments (that specify the location of the ML model to evaluate,
-ML model internal architecture, training and evaluation parameters, etc). These
-include the value of `epsilon` used to evaluate the robustness of the model,
-and the number of gram iterations to run the certifier for, as shown in Table 1 for
-each model.
-
-
-### MNIST (will take about 20--40 minutes)
-
-To reproduce the MNIST results, from the `robustness-verifier/scripts/` directory, run
-this command (making sure you have first done `source cav2025-artifact/bin/activate`
-to enter the Python virtual environment):
+## Running the certifier
 
 ```
-./doit_verified_robust_gloro.sh "../../cav2025-models/2025-01-25_09:27:46-mnist"/ mnist 0.45  "[128,128,128,128,128,128,128,128]" 0.3 ../main 11 500 32
-
+Usage: main <neural_network_input.txt> <GRAM_ITERATIONS> [<CONV_ITERATIONS>]
 ```
 
-The first parameter is the path to the directory containing the MNIST model.
-0.45 is the value of the training epsilon that was used when training this model, using
-the `gloro` framework of Leino et al.  The "[128,...,128]" part specifies the internal
-model architecture (8 layers, each of 128 neurons), corresponding to the "Hidden Neurons"
-column of Table 1 in the paper. 0.3 is the evaluation `epsilon` value, corresponding to the
-"epsilon" column of Table 1 in the paper. `../main` is the relative path to the certifier
-binary. 11 is the number of gram iterations to run the certifier for (corresponding to the
-"Gram" column of Table 1 in the paper). 500 and 32 are respectively the number of epochs
-and batch size used when originally training this model using Leino et al.'s `gloro`
-framework.
+- `GRAM_ITERATIONS` is the number of Gram iterations for each dense layer. More
+  iterations give tighter bounds but take longer. 12 suffice for the paper's
+  models.
+- `CONV_ITERATIONS` is the number of iterations of Algorithm 3 (norm2_toep) of
+  Delattre et al. (2024) for each convolutional layer. The default is the
+  smaller of `GRAM_ITERATIONS` and 3. Each iteration grows the filter from
+  k x k to (2k-1) x (2k-1), so keep this number small.
 
-This script will ask if you wish to proceed. Enter "y" to do so. It may then
-produce the following error message:
-```
-Certifier JSON results file ../../cav2025-models/2025-01-25_09:27:46-mnist//results_epsilon_0.45_[128,128,128,128,128,128,128,128]_500_eval_0.3_gram_11.json already exists!
-```
-This is because the artifact already contains the result files for the experiments reported
-in the paper.
+The certifier first computes the margin Lipschitz bounds. It then reads lines
+from stdin, each with an output vector and a perturbation bound, such as
+`3.0,3.0,4.0 0.49`, and certifies each output. Its JSON output also gives an
+upper bound on each layer's spectral norm (`spectral_norm_bounds`).
 
-Remove this JSON file and re-run the above command, e.g.:
+### Input format
 
-```
-rm ../../cav2025-models/2025-01-25_09:27:46-mnist//results_epsilon_0.45_[128,128,128,128,128,128,128,128]_500_eval_0.3_gram_11.json
-./doit_verified_robust_gloro.sh "../../cav2025-models/2025-01-25_09:27:46-mnist"/ mnist 0.45  "[128,128,128,128,128,128,128,128]" 0.3 ../main 11 500 32
-```
+The network file lists the layers in order, separated by commas, and contains
+only the characters `0123456789.,-[]` and convolutional layers' headers.
 
-This command will produce a lot of output, beginning something like this:
-```
-We will evaluate an existing mnist model in ../../cav2025-models/2025-01-25_09:27:46-mnist/.
-Proceed? (yes/no): y
-Proceeding...
+- A dense layer is a matrix `[[...],...,[...]]` with one row per input, as
+  Keras stores its weights. Each number is an optional `-`, digits, `.` and
+  digits.
+- A convolutional layer is a header `conv(C_in,N,C,K,S,P)` followed by a matrix
+  with C rows, one per output channel, each with C_in·K·K weights, listed by
+  input channel, then kernel row, then kernel column. The layer applies
+  `c(C,K,S,P)` (see [CNN experiments](#cnn-experiments)) to an input of C_in
+  channels of N x N. Inputs and outputs are listed channel by channel, then row
+  by row: pixel (i, j) of channel c is entry c·N·N + i·N + j.
 
+Convolutional layers come first, the last layer is dense, and each layer's
+output size is the next layer's input size.
 
-Artifacts and results will live in: ../../cav2025-models/2025-01-25_09:27:46-mnist//
+## Reproducing the CAV 2025 results
 
-Running with these parameters (saved in ../../cav2025-models/2025-01-25_09:27:46-mnist//params.txt):
-    Data set: mnist
-    (Global) Model input size: 28x28
-    (Training) Gloro epsilon: 0.45
-    (Training) INTERNAL_LAYER_SIZES: [128,128,128,128,128,128,128,128]
-    (Training) Epochs: 500
-    (Training) Batch size: 32
-    (Certifier) Eval epsilon: 0.3
-    (Certifier) GRAM_ITERATIONS: 11
-
-
-Running the certifier. This may take a while...
-2025-04-09 08:11:11 [
-2025-04-09 08:11:12 { "debug_msg": "Generating spectral norm 0 of 9..." },
-2025-04-09 08:11:13 { "debug_msg": "MTM outer loop, i: 0 of : 784" },
-2025-04-09 08:11:13 { "debug_msg": "MTM outer loop, i: 1 of : 784" },
-2025-04-09 08:11:13 { "debug_msg": "MTM outer loop, i: 2 of : 784" },
-2025-04-09 08:11:13 { "debug_msg": "MTM outer loop, i: 3 of : 784" },
-2025-04-09 08:11:13 { "debug_msg": "MTM outer loop, i: 4 of : 784" },
-2025-04-09 08:11:13 { "debug_msg": "MTM outer loop, i: 5 of : 784" },
-2025-04-09 08:11:13 { "debug_msg": "MTM outer loop, i: 6 of : 784" },
-...
-```
-
-It should take approximately 20--40 minutes to complete, at least. The final output
-it produces contains various numbers that look something like the following:
-```
-...
-...done 28000 of 29924 evaluations...
-
-...done 29000 of 29924 evaluations...
-
-Proportion robust: 0.9574
-Proportion correct: 0.984
-Proportion robust and correct: 0.954
-
-Unverified model statistics (to compare to the above verified ones):
-{
-    "comment": "these statistics are unverified and calculated by the gloro implementation",
-    "accuracy": 0.984000027179718,
-    "rejection_rate": 0.042399998754262924,
-    "robustness": 0.9576000012457371,
-    "vra": 0.9541000127792358
-}
-Certifier started at:         2025-04-09 08:11:11
-Certifier produced bounds at: 2025-04-09 08:27:10
-(The difference between these quantities is therefore the time taken to compute those bounds.)
-Certifier finished at: 2025-04-09 08:29:13
-
-All done.
-Artifacts and results all saved in: ../../cav2025-models/2025-01-25_09:27:46-mnist//
-Parameters saved in: ../../cav2025-models/2025-01-25_09:27:46-mnist//params.txt, whose contents follows:
-    Data set: mnist
-    (Global) Model input size: 28x28
-    (Training) Gloro epsilon: 0.45
-    (Training) INTERNAL_LAYER_SIZES: [128,128,128,128,128,128,128,128]
-    (Training) Epochs: 500
-    (Training) Batch size: 32
-    (Certifier) Eval epsilon: 0.3
-    (Certifier) GRAM_ITERATIONS: 11
-
-Model weights and (unverified) gloro lipschitz constants saved in: ../../cav2025-models/2025-01-25_09:27:46-mnist//model_weights_epsilon_0.45_[128,128,128,128,128,128,128,128]_500
-(Unverified) gloro model statistics saved in: ../../cav2025-models/2025-01-25_09:27:46-mnist//model_weights_epsilon_0.45_[128,128,128,128,128,128,128,128]_500/gloro_model_stats.json
-Model outputs saved in: ../../cav2025-models/2025-01-25_09:27:46-mnist//all_mnist_outputs_epsilon_0.45_[128,128,128,128,128,128,128,128]_500.txt
-Neural network (for certifier) saved in: ../../cav2025-models/2025-01-25_09:27:46-mnist//neural_net_mnist_epsilon_0.45_[128,128,128,128,128,128,128,128]_500.txt
-Model outputs for evaluation saved in: ../../cav2025-models/2025-01-25_09:27:46-mnist//all_mnist_outputs_epsilon_0.45_[128,128,128,128,128,128,128,128]_500_eval_0.3.txt
-Certified robustness results saved in: ../../cav2025-models/2025-01-25_09:27:46-mnist//results_epsilon_0.45_[128,128,128,128,128,128,128,128]_500_eval_0.3_gram_11.json
-Timestamped certifier output saved in: ../../cav2025-models/2025-01-25_09:27:46-mnist//results_epsilon_0.45_[128,128,128,128,128,128,128,128]_500_eval_0.3_gram_11.json.timestamps
-```
-
-### Matching the Output to the Results in Table 1
-
-The following columns of Table 1 are evident in this output, as follows:
-
-* "Time (hh:mm:ss)" records the time taken for the certifier to compute the Lipschitz bounds. From the output above, we see that the certifier was at `2025-04-09 08:11:11`
-and produced the Lipschitz bounds at `2025-04-09 08:27:10`, i.e. 15 minutes and 59 seconds later. This is slightly quicker than the figure reported in row 1 of Table 1 of the
-paper (17 minutes and 2 seconds).
-* "Verified Robustness" records the percentage of the test points that were certified robust. We see in the output above "Proportion robust: 0.9574" which corresponds exactly
-to the percentage reported in row 1 of Table 1 (95.74%). We also see that the gloro unverified certifier of Leino et al. certifies the proportion 0.9576000012457371, i.e.
-95.76%, i.e. 0.02 percentage points above the percentage certified by our verified certifier, as indicated by the "(-0.02)" in the "Verified Robustness" column of row 1 of
-Table 1.
-* "VRA" records the percentage of the test points that were both classified accurately by the trained model and certified robust by our certifier. We see that the
-"Proportion robust and correct: 0.954" in the output above, i.e., a VRA of 95.40% as shown in this column. Similarly to the percentage certified robust, the gloro unverified
-certifier of Leino et al. produces a VRA of 0.9541000127792358, i.e 95.41%, which is 0.01 percentage points above our certifier, as indicated by the "(-0.01)" in this column
-of row 1 of Table 1.
-
-## Fashion MNIST (will take about 20--50 minutes)
-
-The results in the second row of Table 1 (for Fashion MNIST) can be reproduced by following the same procedure as for MNIST above. However, running the script as follows:
+Run these commands in `robustness-verifier/scripts/`, in the virtual
+environment. The models of the paper's Table 1 are in `cav2025-models/`:
+`2025-01-25_09:27:46-mnist/`, `2025-01-30_10:58:01-fashion_mnist/` and
+`2025-01-28_20:39:32-cifar10/`. They already hold the paper's result files,
+which the evaluation script will not overwrite, so delete the result JSON
+first. For MNIST:
 
 ```
+rm "../../cav2025-models/2025-01-25_09:27:46-mnist/results_epsilon_0.45_[128,128,128,128,128,128,128,128]_500_eval_0.3_gram_11.json"
+```
+
+### Table 1
+
+```
+./doit_verified_robust_gloro.sh "../../cav2025-models/2025-01-25_09:27:46-mnist"/ mnist 0.45 "[128,128,128,128,128,128,128,128]" 0.3 ../main 11 500 32
 ./doit_verified_robust_gloro.sh "../../cav2025-models/2025-01-30_10:58:01-fashion_mnist"/ fashion_mnist 0.26 "[256,128,128,128,128,128,128,128,128,128,128,128]" 0.25 ../main 12 500 64
-
+./doit_verified_robust_gloro.sh "../../cav2025-models/2025-01-28_20:39:32-cifar10"/ cifar10 0.1551 "[512,256,128,128,128,128,128,128]" 0.141 ../main 12 800 256
 ```
 
-As indicated in Table 1, it may take around 20 minutes for the script to complete. On other machines, this is known to take as long as 50 minutes to complete. It produces output akin to that for MNIST, above.
-
-## CIFAR-10 (will take about 20--40 hours)
-
-The results for CIFAR-10 (third row of Table 1) can be reproduced by running the script as follows:
-
-```
-./doit_verified_robust_gloro.sh "../../cav2025-models/2025-01-28_20:39:32-cifar10"/ cifar10  0.1551 "[512,256,128,128,128,128,128,128]" 0.141 ../main 12 800 256
-```
-
-The output can be matched to the results in row 3 of Table 1 by following the same procedure as for MNIST above.
-
-
-## Claim 3: Reproducing the Paper's Performance Evaluation (Figure 8) 
-
-The performance plot (Figure 8) shows our certifier's performance on the above
-MNIST model for different numbers of gram iterations.
-
-### Unverified Robustness
-
-The "Unverified Robustness" number (95.76%) in this figure is the
-percentage of test points that the unverified gloro certifier of
-Leino et al. certifies as robust, for perturbation bound (epsilon) of 0.3.
-This is recorded in the result file in the artifact, at the time the
-model was trained:
-`cav2025-models/2025-01-25_09:27:46-mnist/model_weights_epsilon_0.45_[128,128,128,128,128,128,128,128]_500/gloro_model_results.json`.
-
-### Measured Robustness (this will take 30--80 minutes)
-
-The "Measured Robustness" number was calculated by running adversarial
-attacks on this MNIST model, which are implemented by the
-`run_pgd_attack.py` script in the `robustness-verifier/scripts`
-directory.
-
-First make sure you have run `source cav2025-artifact/bin/activate` to
-enter the Python virtual environment.
-
-Then install necessary packages needed for this script:
-
-```
-pip install mpmath adversarial-robustness-toolbox
-```
-
-
-Then, from the `robustness-verifier/scripts/` directory,
-run the script as follows:
-
-```
-python3 run_pgd_attack.py  mnist "[128,128,128,128,128,128,128,128]" "../../cav2025-models/2025-01-25_09:27:46-mnist/model_weights_epsilon_0.45_[128,128,128,128,128,128,128,128]_500"/ 0.3 500 28
-```
-
-It will take about half an hour and produce output that finishs with lines like this:
-
-```
-Running attack FastGradientMethod(norm=2, eps=0.29999995, eps_step=0.01, targeted=True, num_random_init=1, batch_size=32, minimal=True, summary_writer=None, )...
-Running attack FastGradientMethod(norm=2, eps=0.29999995, eps_step=0.01, targeted=False, num_random_init=1, batch_size=32, minimal=True, summary_writer=None, )...
-Running attack MomentumIterativeMethod(norm=2, eps=0.29999995, eps_step=0.01, decay=1.0, targeted=False, num_random_init=0, batch_size=32, max_iter=500, random_eps=False, summary_writer=None, verbose=False, )...
-Running attack MomentumIterativeMethod(norm=2, eps=0.29999995, eps_step=0.01, decay=1.0, targeted=True, num_random_init=0, batch_size=32, max_iter=500, random_eps=False, summary_writer=None, verbose=False, )...
-Running attack ProjectedGradientDescent(norm=2, eps=0.29999995, eps_step=0.01, decay=None, targeted=False, num_random_init=1, batch_size=32, max_iter=500, random_eps=False, summary_writer=None, verbose=False, )...
-Running attack ProjectedGradientDescent(norm=2, eps=0.29999995, eps_step=0.01, decay=None, targeted=True, num_random_init=1, batch_size=32, max_iter=500, random_eps=False, summary_writer=None, verbose=False, )...
-We have 0 gloro robustness results to compare against
-Model accuracy: 98.4
-Robustness on PGD adversarial samples: 97.46%
-Norms of non-false-positive vectors that cause classification changes: min: 0.00740313376351122; max: 0.299999999534099
-False positives in PGD attack: 5
-Norms of false positive vectors: min: 0.300000002028088; max: 0.300000015495363
-Number of PGD attacks succeeding against certified robust outputs: 0
-Number of PGD attacks succeeding against gloro certified robust outputs: 0
-```
-
-The relevant line here is: "Robustness on PGD adversarial samples: 97.46%", which is the value shown in Figure 8.
-Note that since this value is obtained from an attack performed via SGD style optimisation, you may get a different
-value when you run this script but hopefully it will be close to the reported value.
-
-### Verified Robustness and Certifier Running Time (this will take up to a few hours to complete in full)
-
-These numbers were obtained by repeatedly running the main evaluation script
-```
-./doit_verified_robust_gloro.sh "../../cav2025-models/2025-01-25_09:27:46-mnist"/ mnist 0.45  "[128,128,128,128,128,128,128,128]" 0.3 ../main <n> 500 32
-```
-
-on the MNIST model to find the percentage of points our certifier classifies as robust
-and the time taken to compute the Lipschitz bounds (see the MNIST section for reproducing Table 1 results above)
-for different values of `<n>` in the line above (which represents the number of gram iterations).
-
-The plot in Figure 8 was produced by running the above command 10 times, replacing `<n>` above with the values 1 through 10,
-and recording for each the proportion certified as robust by our verified certifier, and the difference between
-the times at which the certifier was started and produced the Lipschitz bounds.
-
-Recall the output of the main evaluation script includes stuff like this:
+These take about 20 to 40 minutes, 20 to 50 minutes and 20 to 40 hours. The
+arguments are the model's directory, the dataset, the training ε, the
+architecture ("Hidden Neurons" in Table 1), the evaluation ε, the certifier,
+the number of Gram iterations, and the training epochs and batch size. Answer
+`y` when the script asks whether to proceed. The MNIST run ends like this:
 
 ```
 Proportion robust: 0.9574
 Proportion correct: 0.984
 Proportion robust and correct: 0.954
-
-Unverified model statistics (to compare to the above verified ones):
-{
-    "comment": "these statistics are unverified and calculated by the gloro implementation",
-    "accuracy": 0.984000027179718,
-    "rejection_rate": 0.042399998754262924,
-    "robustness": 0.9576000012457371,
-    "vra": 0.9541000127792358
-}
+...
 Certifier started at:         2025-04-09 08:11:11
 Certifier produced bounds at: 2025-04-09 08:27:10
 ```
 
-Here we see the proportion certified robust is 95.74% (this is the "Verified Robustness" measure in Figure 8)
-and the time taken to compute the Lipschitz bounds was 15 minutes 59 seconds (this is the
-"Certifier Running Time" in Figure 8).
+"Proportion robust" is the verified robustness (95.74%), and "Proportion robust
+and correct" is the VRA (95.40%). The time between the two timestamps is the
+time taken to compute the bounds: here 15:59, against 17:02 in Table 1. The run
+also prints gloro's unverified robustness and VRA (95.76% and 95.41%), from
+which Table 1's differences (-0.02 and -0.01) come.
 
-# Other Documentation
+### Figure 8
 
-## Certifier Input Format
+Figure 8 plots the MNIST model's results against the number of Gram iterations.
 
-The certifier takes arguments according to its usage information:
-```
-Usage: main <neural_network_input.txt> <GRAM_ITERATIONS>
-```
+- Verified robustness and running time: run the MNIST command above with each
+  number of Gram iterations from 1 to 12. `scripts/results/` already holds the
+  values.
+- Unverified robustness (95.76%): gloro's statistics in
+  `cav2025-models/2025-01-25_09:27:46-mnist/model_weights_epsilon_0.45_[128,128,128,128,128,128,128,128]_500/gloro_model_stats.json`.
+- Measured robustness (97.46%): attack the model, which takes 30 to 80
+  minutes. In the CAV 2025 container, first run
+  `pip install mpmath adversarial-robustness-toolbox==1.19.1`.
 
-The program expects a neural network schema provided in the text file name
-<neural_network_input.txt>. This file must strictly contain only the following
-characters: `0123456789.,[]`. A neural network schema is a comma-separated list
-of matrices. Each matrix is a comma-separated list of vectors, and is enclosed
-in square brackets `[]`. These vectors are considered the 'rows' of the matrix.
-Each vector is a comma-separated list of real numbers, and is enclosed in
-square brackets `[]`. A real number is a non-empty contiguous sequence of
-integers, followed by a period `.`, followed by another non-empty contiguous
-sequence of integers.
+  ```
+  python3 run_pgd_attack.py mnist "[128,128,128,128,128,128,128,128]" "../../cav2025-models/2025-01-25_09:27:46-mnist/model_weights_epsilon_0.45_[128,128,128,128,128,128,128,128]_500"/ 0.3 500 28
+  ```
 
-Upon initialisation, the program computes the margin Lipschitz bounds for each
-pair of logits of the output vector of the neural network read from the input file.
-The program's subsequent input is a series of output vectors and epsilon values
-(perturbation bounds) to certify each output vector against.
+  It prints "Robustness on PGD adversarial samples: 97.46%", or a close value,
+  since the attacks are random. It also prints "Robust accuracy on PGD
+  adversarial samples", an upper bound on the VRA.
 
-Each output vector is represented by a comma-separated list of reals, followed by a
-space, followed by a perturbation bound (epsilon) represented by a real.
+## The CNN extension
 
-The size of the given output vector must be compatible with the given neural network.
+The certifier also accepts CNNs: zero-padded convolutional layers followed by
+dense layers, all without biases, and each except the last followed by ReLU.
+The scripts build each convolutional layer as `ZeroPadding2D(P)` followed by
+`Conv2D(C, K, strides=S, padding='valid', use_bias=False)`, with `Flatten`
+before the first dense layer.
 
-An example of stdin input is: `3.0,3.0,4.0 0.49`.
+What is verified:
 
+- `convolution.dfy` models each convolutional layer as a ghost banded doubly
+  block Toeplitz matrix (`ToeplitzMatrix`), and `CNNToNeuralNetwork` turns a
+  CNN into a CAV 2025 `NeuralNetwork` with one matrix per layer. The matrices
+  are never built at run time.
+- `ToeplitzIsConv` (`convolution.dfy`) proves that this matrix computes
+  `Conv2DZeroPad`, which is defined as Keras computes `ZeroPadding2D(P)`
+  followed by `Conv2D(C, K, strides=S, padding='valid', use_bias=False)`. That
+  this definition matches Keras is not proved.
+- `Norm2Toep` (`operator_norms.dfy`) bounds a convolutional layer's spectral
+  norm by Algorithm 3 (norm2_toep) of Delattre et al. (2024), run on the
+  layer's filter. Each Gram iterate is rescaled and rounded to 16 decimal
+  places, and the rounding errors are added back. Dense layers use the CAV
+  2025 Gram iteration.
 
-## Training and Evaluating Your Own Model
+What is assumed: the CAV 2025 axioms (`SpecNorm`, `Sqrt`, `Assumption1` to
+`Assumption4` and `CauchySchwartz`) and four more, at the end of
+`operator_norms.dfy`, each a published or textbook fact:
 
-The main `doit_verified_robust_gloro.sh` script in the
-`robustness-verifier/scripts/` directory can also be used to train a
-globally robust model and then run our certifier over it to obtain
-results akin to those in Table 1 of our paper.
+- `ConvGramIdentity`: with stride 1 and maximal non-trivial zero padding,
+  TᵀT, where T is the layer's matrix, is the matrix of the convolution with
+  the Gram filter (Prach & Lampert 2022, Eq. 17; Delattre et al. 2024, Th. 4).
+- `SpecNormTriangle`: the triangle inequality for the spectral norm.
+- `ConvCrop`: any other zero padding or stride cannot increase the spectral
+  norm, because each row of the layer's matrix is zero or a different row of
+  that matrix (Prach & Lampert 2022, App. A.1; Thompson 1972).
+- `ConvSchur`: by Schur's test, the spectral norm is at most the larger of the
+  largest absolute row sum and column sum, which `SchurBound` bounds from the
+  filter's weights.
 
-The script supports training three kinds of models, namely the three kinds
-of models that appear in Table 1 (MNIST, Fashion MNIST, and CIFAR-10).
+`scripts/check_conv_axioms.py` checks the three axioms about convolutions, and
+the bound that `Norm2Toep` computes, numerically on 2,592 random layers.
 
-The script provides very rudimentary usage information when run with no
-arguments:
+## CNN experiments
 
-```
-Usage ./doit_verified_robust_gloro.sh "train_and_eval" dataset training_epsilon INTERNAL_LAYER_SIZES eval_epsilon robustness_certifier_binary GRAM_ITERATIONS epochs batch_size [model_input_size]
-Usage ./doit_verified_robust_gloro.sh basedir dataset training_epsilon INTERNAL_LAYER_SIZES eval_epsilon robustness_certifier_binary GRAM_ITERATIONS epochs batch_size [model_input_size]
-```
+### Architectures
 
-This shows two ways of running the script. The second way, in which the first
-argument passed to the script
-is a directory, is used to evaluate an existing model (see e.g.
-Claim 2 above).
+The experiments use three CNNs inspired by the MNIST 2C2F, MNIST 4C3F and
+CIFAR-10 6C2F models of Leino et al. (2021, App. B), in their notation:
+`c(C,K,S)` is a convolutional layer with C output channels, a K x K kernel,
+stride S and K-1 zeros of padding on each side (`c(C,K,S,P)` has P zeros), and
+`d(D)` is a dense layer with D outputs.
 
-The first way, in which the first argument passed to the script is the
-word `train_and_eval` causes the script to train a new globally robust
-model, using the `gloro` framework of Leino et al.
+| Model | Dataset   | ε (training / evaluation) | Architecture                                                              | Inputs to first dense layer | Weights (original)    |
+| ----- | --------- | ------------------------- | ------------------------------------------------------------------------- | --------------------------- | --------------------- |
+| 2C2F  | `mnist`   | 0.45 / 0.3                | `c(16,2,1).c(2,2,1).d(100).d(10)`                                         | 2·30·30 = 1,800             | 181,192 (166,248)     |
+| 4C3F  | `mnist`   | 1.75 / 1.58               | `c(32,2,1).c(32,2,1).c(64,2,1).c(2,2,1).d(512).d(512).d(10)`              | 2·32·32 = 2,048             | 1,328,768 (1,973,536) |
+| 6C2F  | `cifar10` | 0.1551 / 0.141            | `c(32,2,1).c(32,2,1).c(32,2,1).c(64,2,1).c(64,2,1).c(2,2,1).d(512).d(10)` | 2·38·38 = 2,888             | 1,517,440 (2,249,568) |
 
-Here, we document each of the parameters that appear in this usage:
-```
-./doit_verified_robust_gloro.sh "train_and_eval" dataset training_epsilon INTERNAL_LAYER_SIZES eval_epsilon robustness_certifier_binary GRAM_ITERATIONS epochs batch_size [model_input_size]
-```
+Each keeps the original's numbers of layers, dense-layer sizes and channel
+widths, but every convolutional layer has a 2 x 2 kernel, stride 1 and one zero
+of padding on each side, and the last one has 2 channels. The originals, with
+SAME padding, are `c(16,4,2).c(32,4,2).d(100).d(10)`,
+`c(32,3,1).c(32,4,2).c(64,3,1).c(64,4,2).d(512).d(512).d(10)` and
+`c(32,3,1).c(32,3,1).c(32,4,2).c(64,3,1).c(64,3,1).c(64,4,2).d(512).d(10)`.
 
-* `dataset` must be one of `mnist`, `fashion_mnist` and `cifar10`, and
-specifies what type of model to train.
-* `training_epsilon` is the perturbation bound used during globally robust
-training. In the table in the CAV 2025 paper in the appendix listing
-the training hyperparamters, this parameter is called `\epsilon_{train}`.
-* `INTERNAL_LAYER_SIZES` is a Python literal that evaluates to a list of positive numbers. The length of the list defines the number of internal layers in the neural network that will be trained, where entry `i` defines the number of
-neurons in internal layer `i` (indexed from 0). In particular, the script
-builds and trains a fully-connected, Dense neural network whose input and
-output size is defined by the `dataset` parameter. To train a model with no
-internal layers, use `[]` for this parameter.
-* `eval_epsilon` is the perturbation bound against which the trained model's
-robustness will be evaluated (over its test set). This is parameter `\epsilon`
-in Table 1 of the CAV 2025 paper.
-* `robustness_certifier_binary` is the path to the executable file produced
-by building our certifier (see Claim 1 above). Usually, this is `../main`
-when this script is run from the `scripts/` subdirectory of the
-`robustness-verifier/` directory.
-* `GRAM_ITERATIONS` specifies the number of gram iterations to use when our
-certifier is run, to compute safe Lipschitz bounds for the trained model.
-Increasing this number means our certifier takes longer to run but will
-produce less conservative robustness certifications.
-* `epochs` is the number of training epochs to run model training for. In
-the table in the Appendix of the CAV 2025 paper showing the model training
-hyperparameters, this is `# epochs`.
-* `batch_size` is the batch size to use during model training. 
-In
-the table in the Appendix of the CAV 2025 paper showing the model training
-hyperparameters, this is `batch size`.
+The 2 channels keep the first dense layer small: the cost of its Gram
+iteration grows with its number of inputs.
 
+Training follows Leino et al.'s ReLU models (2021, Table B.2), as CAV 2025
+did. Each model is trained with a larger ε than it is evaluated with, for 500,
+300 and 800 epochs, with batches of 256, Adam, a learning rate decaying from
+10⁻³ to 10⁻⁶, cross-entropy loss, a fixed ε and no data augmentation. Leino et
+al. also let 4C3F's learning rate decay only to 5 × 10⁻⁶, and trained 6C2F with
+data augmentation, warm-up, a logarithmic ε schedule and orthogonal
+initialisation.
+
+[`scripts/README.md`](scripts/README.md#cnn-experiments) gives the commands for
+all the experiments.
+
+### Results
+
+These results use 6 Gram iterations for the dense layers and the default 3
+iterations of Algorithm 3, on an M1 MacBook Air with 16 GB of memory.
+Percentages are of the 10,000 test points. GloRo's figures are its unverified
+statistics from training, and the measured ones are the upper bounds from the
+attacks of `run_pgd_attack.py`. The times are those taken to compute the
+bounds.
+
+| Model                             | Accuracy | Robustness: verified / GloRo / measured | VRA: verified / GloRo / measured | Time: verified / GloRo |
+| --------------------------------- | -------- | --------------------------------------- | -------------------------------- | ---------------------- |
+| 2C2F                              | 97.59%   | 91.98% / 93.98% / 96.88%                | 91.56% / 93.43% / 95.75%         | 6,466 s / 0.1 s        |
+| 4C3F                              | 90.44%   | 10.08% / 44.33% / 60.69%                | 10.08% / 44.25% / 60.12%         | 11,321 s / 1.5 s       |
+| 4C3F, 4 iterations of Algorithm 3 | 90.44%   | 27.16% / 44.33% / 60.69%                | 27.15% / 44.25% / 60.12%         | 13,096 s / 1.5 s       |
+| 6C2F                              | 53.52%   | 5.86% / 46.62% / 66.33%                 | 5.49% / 33.18% / 42.12%          | 28,872 s / 2.0 s       |
+| CAV 2025 MNIST (dense)            | 98.40%   | 94.18% / 95.76% / –                     | 93.94% / 95.41% / –              | 637 s / 2.2 s          |
+| CAV 2025 CIFAR-10 (dense)\*       | 57.74%   | 39.13% / 46.42% / –                     | 31.66% / 36.17% / –              | – / 1.0 s              |
+
+\* The verified figures come from CAV 2025's result file for 6 Gram iterations
+in `cav2025-models.zip`: we did not certify this model again. With 12 Gram
+iterations, CAV 2025 reports 46.12% and 35.95%, with the bounds computed in
+19:02:32 (Table 1).
+
+With 11 Gram iterations, the certifier reproduces the CAV 2025 MNIST model's
+published verified robustness and VRA, 95.74% and 95.40%, exactly, in 1,104 s.
+
+The attacks found adversarial examples for 312, 3,931 and 3,367 test points of
+2C2F, 4C3F and 6C2F, but none for an output that the certifier, with 6 Gram
+iterations, or GloRo had certified robust.

@@ -1,142 +1,204 @@
-Scripts to empirically evaluate the robustness certifier.
+# Evaluation scripts
 
-The top-level script is the shell script: `doit_verified_robust_gloro.sh`.
+Run the scripts from this directory, in the virtual environment (see the
+top-level [`README.md`](../README.md#setting-up)).
 
-That script:
-1. Trains an Gloro MNIST model (using `train_gloro.py`)
-2. Manually constructs a "zero bias" version of the model and uses that to produce output vectors for all MNIST test points (using `zero_bias_saved_model.py`)
-3. Saves the resulting "zero bias" model's weights in a format the certifier can understand (using `make_certifier_format.py`)
-4. Runs the certifier over the output vectors produced by step 2, using the weights produced by step 3
-5. Measures the resulting "zero bias" model's (using `test_verified_certified_robust_accuracy.py`):
-  * accuracy: the proportion of MNIST test points correctly classified
-  * robustness: the proportion of the MNIST test points that the cerfifier says are robust
-  * verified robust accuracy (VRA): the proportion of MNIST test points that are both accurately classified and certified robust
+| Script                                            | Purpose                                                                    |
+| ------------------------------------------------- | -------------------------------------------------------------------------- |
+| `doit_verified_robust_gloro.sh`                   | Train or load a model, certify it, and report accuracy, robustness and VRA |
+| `cnn_experiments.sh`                              | Run the CNN experiments, one step at a time                                |
+| `run_pgd_attack.py`                               | Measure robustness and robust accuracy by adversarial attacks              |
+| `get_gloro_robustness_results.py`                 | Recompute gloro's unverified statistics and time its bound computation     |
+| `gram_sweep_csv.py`, `plot_robustness_vs_gram.py` | Plot robustness or VRA against the number of Gram iterations               |
+| `check_conv_axioms.py`                            | Check the convolution axioms numerically                                   |
 
-The top-level script takes arguments to specify parameters to use to define the model architecture and how to train it, as well as the evaluation epsilon value used by the certifier when certifying robustness.
-
-There is also a script for running adversarial attacks on a model to estimate robustness upper bounds:
-`run_pgd_attack.py`.
-
-# Reproducing Paper Plots and Tables
-
-To reproduce the results in the paper:
-
-## Fig 9 (the performance plots)
-
-To generate the data for 7x7 run
+## The evaluation script
 
 ```
-./doit_verified_robust_gloro.sh 0.3 "[16]" 0.3 ../main n 500 256 7
-```
-for each of `n` in 1 to 10.
-
-For each run, this will produce output that ends in something like the following (notwithstanding the different parameter values):
-
-```
-Proportion robust: 0.324
-Proportion correct: 0.728
-Proportion robust and correct: 0.3124
-
-Certifier started at:         2024-12-21 12:05:46
-Certifier produced bounds at: 2024-12-21 12:05:48
-(The difference between these quantities is therefore the time taken to compute those bounds.)
-Certifier finished at: 2024-12-21 12:07:00
-
-All done.
-Artifacts and results all saved in: 2024-12-21_12:05:32/
-Parameters saved in: 2024-12-21_12:05:32/params.txt, whose contents follows:
-    (Global) Model input size: 7x7
-    (Training) Gloro epsilon: 0.3
-    (Training) INTERNAL_LAYER_SIZES: [16]
-    (Training) Epochs: 3
-    (Training) Batch size: 32
-    (Certifier) Eval epsilon: 0.3
-    (Certifier) GRAM_ITERATIONS: 4
-
-Model weights saved in: 2024-12-21_12:05:32/model_weights_epsilon_0.3_[16]_3
-Model outputs saved in: 2024-12-21_12:05:32/all_mnist_outputs_epsilon_0.3_[16]_3.txt
-Neural network (for certifier) saved in: 2024-12-21_12:05:32/neural_net_mnist_epsilon_0.3_[16]_3.txt
-Model outputs for evaluation saved in: 2024-12-21_12:05:32/all_mnist_outputs_epsilon_0.3_[16]_3_eval_0.3.txt
-Certified robustness results saved in: 2024-12-21_12:05:32/results_epsilon_0.3_[16]_3_eval_0.3_gram_4.json
-Timestamped certifier output saved in: 2024-12-21_12:05:32/results_epsilon_0.3_[16]_3_eval_0.3_gram_4.json.timestamps
+./doit_verified_robust_gloro.sh "train_and_eval" dataset training_epsilon INTERNAL_LAYER_SIZES eval_epsilon robustness_certifier_binary GRAM_ITERATIONS epochs batch_size [model_input_size]
+./doit_verified_robust_gloro.sh basedir dataset training_epsilon INTERNAL_LAYER_SIZES eval_epsilon robustness_certifier_binary GRAM_ITERATIONS epochs batch_size [model_input_size]
 ```
 
-The "Proportion robust" is the "Certified Robustness" proportion. 
+The first form trains a new model with gloro (`train_gloro.py`), in a new
+directory named after the date and the dataset. The second evaluates the model
+that an earlier run created in `basedir`. The script then:
 
-The time to compute the bounds is the difference between the first two reported timestamps (per the output). That
-difference can be calculated by pasting the two values into Excel and having it compute the subtraction (formatting the result
-cell with "Custom" format "hh:mm:ss"). If the difference exceeds 23:59:59 (1 day) then Excel doesn't compute it correctly.
-In that case, calculate it manually. 
+1. builds a zero-bias copy of the model and computes its outputs on the test
+   set (`zero_bias_saved_model.py`);
+2. writes the weights in the certifier's input format
+   (`make_certifier_format.py`);
+3. certifies the outputs with the certifier;
+4. prints the proportions robust, correct, and robust and correct (the VRA)
+   (`test_verified_certified_robust_accuracy.py`), gloro's unverified
+   statistics, and the certifier's timestamps. The time taken to compute the
+   bounds is the difference between "Certifier started at" and "Certifier
+   produced bounds at".
 
-Write down these certified robustness proportions and times. Manually convert the times into quantities in seconds. Then update
-the values in `robustness_vs_gram_input_7_[16].csv`.
+The arguments:
 
-To produce the PDF file for the 7x7 plot, then run:
+- `dataset`: `mnist`, `fashion_mnist` or `cifar10`.
+- `training_epsilon` and `eval_epsilon`: the perturbation bounds for training
+  and for certification.
+- `INTERNAL_LAYER_SIZES`: either the hidden-layer sizes of a dense network,
+  such as `"[128,128]"` (`[]` for none; the output layer is added), or a CNN
+  in the notation of Leino et al. (2021, App. B), such as
+  `"c(16,2,1).c(2,2,1).d(100).d(10)"`. `c(C,K,S)` is a convolutional layer with
+  C output channels, a K x K kernel, stride S and K-1 zeros of padding on each
+  side (`c(C,K,S,P)` has P zeros), and `d(D)` is a dense layer with D outputs.
+  Convolutional layers come first, and the last layer is `d(10)`. No layer has
+  a bias, and every layer except the last is followed by ReLU.
+- `robustness_certifier_binary`: usually `../main`.
+- `GRAM_ITERATIONS`: the number of Gram iterations for the dense layers.
+  Convolutional layers get the certifier's default `CONV_ITERATIONS`, the
+  smaller of `GRAM_ITERATIONS` and 3. To choose it, run the certifier directly,
+  e.g. `cat outputs_eval.txt | ../main neural_net.txt 6 2 > results.json`.
+- `epochs` and `batch_size`: for training.
+- `model_input_size` (optional): resizes the images to `model_input_size` x
+  `model_input_size`. The default is 28 for MNIST and Fashion MNIST, and 32 for
+  CIFAR-10.
+
+For example, this trains and certifies the MNIST 2C2F model, and then
+certifies it again with `n` Gram iterations:
+
 ```
-python3 plot_robustness_vs_gram.py "Certifier Performance (7x7 MNIST)" results/robustness_vs_gram_input_7_\[16\].csv results/measured_robustness_input_7_\[16\].txt performance_7.pdf
-```
-This saves the PDF plot in `performance_7.pdf` which can then be copied over to the paper directory.
-
-For the 14x14 plot, the process is the same except starts by running:
-
-```
-./doit_verified_robust_gloro.sh 0.3 "[64]" 0.3 ../main n 500 256 14
+./doit_verified_robust_gloro.sh train_and_eval mnist 0.45 "c(16,2,1).c(2,2,1).d(100).d(10)" 0.3 ../main 6 500 256
+./doit_verified_robust_gloro.sh dir mnist 0.45 "c(16,2,1).c(2,2,1).d(100).d(10)" 0.3 ../main n 500 256
 ```
 
-The updated certified robustness proportions and times should then be saved to `results/robustness_vs_gram_input_14_[64].csv`.
-To produce the 14x14 plot, run:
+For a CNN:
+
+- The model is `ZeroPadding2D(P)` and
+  `Conv2D(C, K, strides=S, padding='valid', use_bias=False, activation='relu')`
+  for each convolutional layer, then `Flatten` and the dense layers. gloro
+  warns that it uses 1.0 as the Lipschitz constant of `ZeroPadding2D`. That is
+  correct: padding only adds zeros.
+- `train_gloro.py` saves a convolutional layer's kernel, of Keras shape
+  `(K, K, C_in, C)`, in `layer_<i>_weights.csv` as a `(K·K·C_in) x C` matrix,
+  and a dense layer's weights as its inputs x outputs matrix.
+- `make_certifier_format.py INTERNAL_LAYER_SIZES model_weights_csv_dir dataset input_size`
+  writes each convolutional layer as `conv(C_in,N,C,K,S,P)` and its kernel. It
+  also reorders the first dense layer's rows from the order of Keras' `Flatten`
+  (row, column, channel) to the certifier's (channel, row, column).
+- Keep the first dense layer's number of inputs, C·M·M for the last
+  convolutional layer's C channels of M x M, small. The Gram iteration's matrix
+  has one row and one column per input.
+
+## CNN experiments
+
+`./cnn_experiments.sh STEP MODEL [N...]` runs one step of the experiments for
+one model, and keeps the model's logs, CSVs, plots and numbers in
+`results/cnn/MODEL/`. Run it without arguments for its usage.
+
+Run one step at a time: the certifier's and gloro's bound computation times
+are results, and a job running alongside slows them down. If `certify` stops,
+run it again: it skips the numbers of Gram iterations that finished. If `train`
+stops while training, delete its new run directory, and `model_weights_csv/`
+if it exists, before training again.
+
+These are all the experiments, in order. First, CAV 2025's MNIST model,
+exported again with today's `make_certifier_format.py`:
+
 ```
-python3 plot_robustness_vs_gram.py "Certifier Performance (14x14 MNIST)" results/robustness_vs_gram_input_14_\[64\].csv results/measured_robustness_input_14_\[64\].txt performance_14.pdf
-```
-which produces `performance_14.pdf`.
-
-(See further below for how to caluclate the Measured Robustness figures for these plots. However that probabaly isn't necessary
-unless we are training models with new paramters, i.e. updates to the certifier won't meaningfully change the Measured Robustness
-numbers because they have nothing to do with the certifier.)
-
-
-## Table 1 (the performance table)
-
-The data for each row of this table can be reproduced by running the `doit_verified_robust_gloro.sh` script with the corresponding parameters.
-For example, the final row can be reproduced by running:
-
-```
-./doit_verified_robust_gloro.sh 0.45 "[64]" 0.3 ../main 6 500 256 28
+./cnn_experiments.sh setup-cav cav-mnist
+./cnn_experiments.sh certify cav-mnist 6 11
+./cnn_experiments.sh gloro cav-mnist
+./cnn_experiments.sh summary cav-mnist 6
+./cnn_experiments.sh summary cav-mnist 11
 ```
 
-The first parameter is the training epsilon value. The second is a list where each element represents a hidden layer and the number of
-neurons in it. Here we use a single hidden layer (single-element list) of 64 neurons. The next parameter is the evaluation epsilon value:
-i.e. the value of epsilon that the certifier is certifying outputs as robust against. The path to the certifier comes next.
-The number of gram iterations (here 6) comes next, followed by the training number of epochs and batch sizes. Leave these as 500 and 256.
-The final parameter is the size of the input for the MNIST model. For these examples we use full MNIST models (28x28 size input).
+The three CNNs. `train` certifies each one with 6 Gram iterations, and
+`certify` adds the other numbers of Gram iterations:
 
-This will produce data to allow calculating figures for each row of the table. The "Accuracy" column is the
-"Proportion correct". The "Certified Robustness" column is the "Proportion robust". "VRA" is the "Proportion robust and correct".
-
-
-## Calculating Measured Robustness
-
-I don't think there is a need to re-calculate these numbers. They do not depend on the certifier in any way. 
-
-However, these figures can be calculated after model training (i.e. after running the `doit_verified_robust_gloro.sh` script).
-
-For example, to calculate the figures for the 7x7 MNIST model run:
 ```
-python3 run_pgd_attack.py [16] model_weights_csv_dir 0.3 500 7
+./cnn_experiments.sh train 2c2f
+./cnn_experiments.sh gloro 2c2f
+./cnn_experiments.sh certify 2c2f 1 2 3 4 5 7 8 9 10
+./cnn_experiments.sh pgd 2c2f
+./cnn_experiments.sh plot 2c2f
+./cnn_experiments.sh summary 2c2f
 ```
-where `model_weights_csv_dir` is the directory in which the `doit` script reports that model weights were saved in, e.g. in the
-output above we see:
+
 ```
-Model weights saved in: 2024-12-21_12:05:32/model_weights_epsilon_0.3_[16]_3
+./cnn_experiments.sh train 4c3f
+./cnn_experiments.sh gloro 4c3f
+./cnn_experiments.sh certify 4c3f 1 2 3 4 8
+./cnn_experiments.sh pgd 4c3f
+./cnn_experiments.sh plot 4c3f
+./cnn_experiments.sh summary 4c3f
 ```
-which means this directory is `"2024-12-21_12:05:32/model_weights_epsilon_0.3_[16]_3"`.
 
-Note: you may need to surround these directory names with double-quotes "" because they contain special characters like '[' etc.
+```
+./cnn_experiments.sh train 6c2f
+./cnn_experiments.sh gloro 6c2f
+./cnn_experiments.sh certify 6c2f 1 2 3 4 8
+./cnn_experiments.sh pgd 6c2f
+./cnn_experiments.sh plot 6c2f
+./cnn_experiments.sh summary 6c2f
+```
 
-Here the 500 refers to the "strength" of the attacks run. In all examples in the paper I set this to 500. 7 refers to the model's input
-size (here 7x7).
+`train` runs the evaluation script:
 
-This script produces output that finishes with e.g.:
+```
+./doit_verified_robust_gloro.sh train_and_eval mnist 0.45 "c(16,2,1).c(2,2,1).d(100).d(10)" 0.3 ../main 6 500 256
+./doit_verified_robust_gloro.sh train_and_eval mnist 1.75 "c(32,2,1).c(32,2,1).c(64,2,1).c(2,2,1).d(512).d(512).d(10)" 1.58 ../main 6 300 256
+./doit_verified_robust_gloro.sh train_and_eval cifar10 0.1551 "c(32,2,1).c(32,2,1).c(32,2,1).c(64,2,1).c(64,2,1).c(2,2,1).d(512).d(10)" 0.141 ../main 6 800 256
+```
+
+4C3F with 4 iterations of Algorithm 3 instead of 3 shows what the default
+costs. `cnn_experiments.sh` has no step for this, so run the certifier
+directly, and then compute the proportions. This takes about 3.7 hours. On a
+Mac, put `caffeinate -i` before `../main` to keep it awake.
+
+```
+D=$(cat results/cnn/4c3f/run_dir.txt)
+A="c(32,2,1).c(32,2,1).c(64,2,1).c(2,2,1).d(512).d(512).d(10)"
+cat "$D/all_mnist_outputs_epsilon_1.75_${A}_300_eval_1.58.txt" | ../main "$D/neural_net_mnist_epsilon_1.75_${A}_300.txt" 6 4 | tee results/cnn/4c3f/conv4-gram-6.json | ts "%Y-%m-%d %H:%M:%S" > results/cnn/4c3f/conv4-gram-6.log
+python3 test_verified_certified_robust_accuracy.py mnist "$A" results/cnn/4c3f/conv4-gram-6.json "$D/model_weights_epsilon_1.75_${A}_300" 28
+```
+
+The bound computation time is the difference between the timestamps of the
+log's first line, `[`, and its line with `"lipschitz_bounds"`.
+
+Last, CAV 2025's CIFAR-10 model. Certifying it again takes many hours: the CAV
+2025 run with 6 Gram iterations took 16.4 hours. The results therefore use the
+result file of that run, kept in `cav2025-models.zip`. `setup-cav` and `gloro`
+time gloro's bound computation (about 1 s). `setup-cav` deletes the result
+files from its copy of the model, so unzip the model again to compute the
+proportions from the result file:
+
+```
+./cnn_experiments.sh setup-cav cav-cifar10
+./cnn_experiments.sh gloro cav-cifar10
+unzip -q ../cav2025-models.zip 'cav2025-models/2025-01-28_20:39:32-cifar10/*' -d /tmp/cav
+D='/tmp/cav/cav2025-models/2025-01-28_20:39:32-cifar10'
+A='[512,256,128,128,128,128,128,128]'
+python3 test_verified_certified_robust_accuracy.py cifar10 "$A" "$D/results_epsilon_0.1551_${A}_800_eval_0.141_gram_6.json" "$D/model_weights_epsilon_0.1551_${A}_800" 32
+```
+
+The last command ends with:
+
+```
+Proportion robust: 0.3913
+Proportion correct: 0.5774
+Proportion robust and correct: 0.3166
+```
+
+To certify the model again instead, run `./cnn_experiments.sh certify cav-cifar10 6`
+and then `./cnn_experiments.sh summary cav-cifar10 6`.
+
+## Measured robustness
+
+```
+python3 run_pgd_attack.py dataset INTERNAL_LAYER_SIZES model_weights_csv_dir eval_epsilon 500 model_input_size
+```
+
+`model_weights_csv_dir` is the directory in which the evaluation script saved
+the weights. Quote it, because its name contains `[` or `(`. The script needs
+mpmath and ART (in the CAV 2025 container, run
+`pip install mpmath adversarial-robustness-toolbox==1.19.1` first). It runs
+FGSM, the Momentum Iterative Method and PGD, each targeted and untargeted,
+with 500 iterations for the iterative attacks. It ends with lines like these:
+
 ```
 Model accuracy: 72.8
 Robustness on PGD adversarial samples: 53.28%
@@ -145,13 +207,95 @@ False positives in PGD attack: 0
 Number of PGD attacks succeeding against certified robust outputs: 0
 ```
 
-The model accuracy should match the figure reported earlier as the "Proportion correct" by the `doit..sh` script.
+"Robustness on PGD adversarial samples" is the measured robustness. The next
+line, "Robust accuracy on PGD adversarial samples", is the measured robust
+accuracy. These bound the verified robustness and VRA of any sound certifier
+from above. False positives are adversarial examples that lie beyond ε when
+their distance is computed exactly, so they do not count. The model accuracy
+should match the evaluation script's "Proportion correct".
 
-The "Robustness on PDG adversarial samples" is the "Measured Robustness" figure.
+## gloro's bound computation time
 
-Do similarly for the 14x14 MNIST model, replacing the 7 above with 14.
+```
+python3 get_gloro_robustness_results.py mnist "c(16,2,1).c(2,2,1).d(100).d(10)" "dir/model_weights_epsilon_0.45_c(16,2,1).c(2,2,1).d(100).d(10)_500" 0.3 28 100 > 2c2f-gloro-rerun.json
+jq -r '.[].debug_msg // empty' 2c2f-gloro-rerun.json
+```
 
-Then save the resulting figures to `measured_robustness_input_7_[16].txt` (for the 7x7 MNIST model)
-and `measured_robustness_input_14_[64].txt` (for the 14x14 MNIST model) and rerun the python scripts to generate the plots.
+The last line it prints, `gloro Lipschitz bound computation time (seconds): …`,
+is gloro's time in the results table. The last argument, 100, is the maximum
+number of power-iteration steps.
 
-Do likewise to calculate Measured Robustness for each row of Table 1. 
+## Plots
+
+`cnn_experiments.sh plot` plots robustness and VRA against the number of Gram
+iterations. The plot script needs pandas (in the CAV 2025 container, run
+`pip install pandas numpy==1.24.3` first). By hand, save each evaluation run's
+output (add
+`2>&1 | tee 2c2f-gram-n.log` to the command) and the measured robustness as a
+proportion in a text file (`0.972` for 97.20%, as the plot script multiplies
+its inputs by 100), and then run:
+
+```
+python3 gram_sweep_csv.py robust 2c2f-gram-*.log > 2c2f-sweep.csv
+jq '.[0].robustness' "dir/model_weights_epsilon_0.45_c(16,2,1).c(2,2,1).d(100).d(10)_500/gloro_model_results.json" > 2c2f-gloro.txt
+python3 plot_robustness_vs_gram.py 2c2f-sweep.csv 2c2f-measured.txt 2c2f-gloro.txt 2c2f.pdf
+```
+
+For the VRA, use `gram_sweep_csv.py vra`, `jq '.[0].vra'` and the measured
+robust accuracy, and add `vra` at the end of the plot command.
+
+The data for CAV 2025's Figure 8 are in `results/`:
+
+```
+python3 plot_robustness_vs_gram.py "results/robustness_vs_gram_input_28_[128,128,128,128,128,128,128,128].txt" "results/measured_robustness_input_28_[128,128,128,128,128,128,128,128].txt" "results/gloro_robustness_28_[128,128,128,128,128,128,128,128].txt" performance_28.pdf
+```
+
+`results/` also holds the data for two smaller MNIST models, with 7 x 7 and
+14 x 14 inputs. To redo them, train with 1 Gram iteration, and certify the
+model in the directory that this creates (`dir`) with 2 to 10:
+
+```
+./doit_verified_robust_gloro.sh train_and_eval mnist 0.3 "[16]" 0.3 ../main 1 500 256 7
+./doit_verified_robust_gloro.sh dir mnist 0.3 "[16]" 0.3 ../main n 500 256 7
+```
+
+For 14 x 14, use `"[64]"` and `14`. Record each run's proportion robust and
+time in seconds in `results/robustness_vs_gram_input_7_[16].csv` (or
+`results/robustness_vs_gram_input_14_[64].csv`), and the measured robustness
+from `run_pgd_attack.py` in `results/measured_robustness_input_7_[16].txt`.
+Then save gloro's robustness and plot:
+
+```
+jq '.[0].robustness' "dir/model_weights_epsilon_0.3_[16]_500/gloro_model_results.json" > results/gloro_robustness_input_7_\[16\].txt
+python3 plot_robustness_vs_gram.py results/robustness_vs_gram_input_7_\[16\].csv results/measured_robustness_input_7_\[16\].txt results/gloro_robustness_input_7_\[16\].txt performance_7.pdf
+```
+
+## Checking the convolution axioms
+
+`check_conv_axioms.py` checks numerically the three axioms that the CNN
+extension adds about convolutions (`ConvGramIdentity`, `ConvCrop` and
+`ConvSchur`, in `operator_norms.dfy`), and the bound that `Norm2Toep` computes.
+It builds the matrices of 2,592 random layers (Gaussian filters with 1 to 3
+input and output channels and kernels of size 1 to 3, on inputs of size 2 to 5,
+with strides 1 to 3 and 0 to K zeros of padding), and compares them with their
+spectral norms, computed by SVD in double precision. It needs only numpy and
+takes about a minute:
+
+```
+python3 check_conv_axioms.py
+```
+
+Each deviation should be at the level of floating-point rounding. On an M1
+MacBook Air (the last digits depend on the platform), it prints:
+
+```
+2592 layers (random filters, strides 1-3, paddings 0..k):
+  ConvGramIdentity: max |T^T T - SameConv(GramStep)| = 1.42e-14
+  ConvCrop:  max sigma(T) - sigma(T_full)  = 7.11e-15  (must be <= 0)
+  ConvSchur: max sigma(T) - SchurBound(K)   = 0.00e+00  (must be <= 0)
+  Norm2Toep, N = 1..3: max sigma(T) - bound = 4.44e-16  (must be <= 0)
+```
+
+Such tests cannot prove the axioms, but they would catch a misstatement, such
+as an off-by-one index in the Gram filter or the padding. The fourth axiom,
+`SpecNormTriangle`, is the triangle inequality for the spectral norm.

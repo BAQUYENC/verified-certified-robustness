@@ -732,9 +732,10 @@ module OperatorNorms {
   }
 
   /**
-    * F with every weight rounded away from zero to a multiple of 1/S, as
-    * Truncate does for matrices with S = 10^ROUNDING_PRECISION. Equal weights
-    * round to equal weights, so a Gram filter's symmetry is kept.
+    * F with every weight rounded away from zero to the nearest multiple of 1/S
+    * (RoundAway). Truncate does the same for matrices, with
+    * S = 10^ROUNDING_PRECISION, except for negative entries (see RoundAway).
+    * Equal weights round to equal weights, so a Gram filter's symmetry is kept.
     */
   function TruncateFilter(F: seq<seq<seq<seq<real>>>>, cOut: nat, cIn: nat, k: nat, S: real):
     (R: seq<seq<seq<seq<real>>>>)
@@ -748,8 +749,12 @@ module OperatorNorms {
   }
 
   /**
-    * x rounded away from zero to a multiple of 1/S: for S = 10^ROUNDING_PRECISION
-    * the same as RoundUp and RoundDown, but with one Floor instead of a loop.
+    * x rounded away from zero to the nearest multiple of 1/S. For
+    * S = 10^ROUNDING_PRECISION, RoundUp gives the same for x >= 0, but RoundDown
+    * subtracts 1 before taking the floor, so for x < 0 it goes one step of 1/S
+    * further unless x is already a multiple of 1/S: -1/3 gives
+    * -0.3333333333333334 here but -0.3333333333333335 by RoundDown. Either is
+    * sound, because the rounding error is bounded and added back.
     */
   function RoundAway(x: real, S: real): real
     requires S > 0.0

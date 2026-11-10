@@ -1,0 +1,13 @@
+4c3f: c(32,2,1).c(32,2,1).c(64,2,1).c(2,2,1).d(512).d(512).d(10) on mnist, epsilon 1.58
+Verified certifier, 6 Gram iterations (results/cnn/4c3f/gram-6.log):
+  Proportion robust: 0.1008
+  Proportion correct: 0.9044
+  Proportion robust and correct: 0.1008
+  Seconds to compute the bounds: 11321
+Unverified gloro certifier (statistics from training):
+  accuracy: 0.9043999910354614
+  robustness: 0.4433000087738037
+  vra: 0.4424999952316284
+  gloro Lipschitz bound computation time (seconds): 1.4939533750002738
+Measured robustness (PGD): 0.6069
+Measured robust accuracy (PGD): 0.6012

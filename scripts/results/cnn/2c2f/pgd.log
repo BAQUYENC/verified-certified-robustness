@@ -1,0 +1,57 @@
+/Users/admin/verified-certified-robustness/.venv/lib/python3.11/site-packages/art/estimators/certification/__init__.py:30: UserWarning: PyTorch not found. Not importing DeepZ or Interval Bound Propagation functionality
+  warnings.warn("PyTorch not found. Not importing DeepZ or Interval Bound Propagation functionality")
+2026-11-04 23:22:49.435482: I tensorflow/compiler/mlir/mlir_graph_optimization_pass.cc:375] MLIR V1 optimization pass is not enabled
+2026-11-04 23:22:49.444535: W tensorflow/c/c_api.cc:304] Operation '{name:'conv2d_1/kernel/Assign' id:36 op device:{requested: '', assigned: ''} def:{{{node conv2d_1/kernel/Assign}} = AssignVariableOp[_has_manual_control_dependencies=true, dtype=DT_FLOAT, validate_shape=false](conv2d_1/kernel, conv2d_1/kernel/Initializer/stateless_random_uniform)}}' was changed by setting attribute after it was run by a session. This mutation will have no effect, and will trigger an error in the future. Either don't modify nodes after running them or create a new session.
+
+
+Running with internal layer dimensions: c(16,2,1).c(2,2,1).d(100).d(10)
+Running with input size: 28
+Running attacks with epsilon: 0.3
+MAX_ITER: 500
+Building zero-bias gloro model from saved weights...
+Model: "model"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #   
+=================================================================
+ input_1 (InputLayer)        [(None, 28, 28, 1)]       0         
+                                                                 
+ zero_padding2d (ZeroPaddin  (None, 30, 30, 1)         0         
+ g2D)                                                            
+                                                                 
+ conv2d (Conv2D)             (None, 29, 29, 16)        64        
+                                                                 
+ zero_padding2d_1 (ZeroPadd  (None, 31, 31, 16)        0         
+ ing2D)                                                          
+                                                                 
+ conv2d_1 (Conv2D)           (None, 30, 30, 2)         128       
+                                                                 
+ flatten (Flatten)           (None, 1800)              0         
+                                                                 
+ dense (Dense)               (None, 100)               180000    
+                                                                 
+ dense_1 (Dense)             (None, 10)                1000      
+                                                                 
+=================================================================
+Total params: 181192 (707.78 KB)
+Trainable params: 181192 (707.78 KB)
+Non-trainable params: 0 (0.00 Byte)
+_________________________________________________________________
+/Users/admin/verified-certified-robustness/.venv/lib/python3.11/site-packages/keras/src/engine/training_v1.py:2359: UserWarning: `Model.state_updates` will be removed in a future version. This property should not be used in TensorFlow 2.0, as `updates` are applied automatically.
+  updates=self.state_updates,
+2026-11-04 23:22:49.718160: W tensorflow/c/c_api.cc:304] Operation '{name:'dense_1/MatMul' id:75 op device:{requested: '', assigned: ''} def:{{{node dense_1/MatMul}} = MatMul[T=DT_FLOAT, _has_manual_control_dependencies=true, transpose_a=false, transpose_b=false](dense/Relu, dense_1/MatMul/ReadVariableOp)}}' was changed by setting attribute after it was run by a session. This mutation will have no effect, and will trigger an error in the future. Either don't modify nodes after running them or create a new session.
+2026-11-04 23:22:49.725589: W tensorflow/c/c_api.cc:304] Operation '{name:'count/Assign' id:102 op device:{requested: '', assigned: ''} def:{{{node count/Assign}} = AssignVariableOp[_has_manual_control_dependencies=true, dtype=DT_FLOAT, validate_shape=false](count, count/Initializer/zeros)}}' was changed by setting attribute after it was run by a session. This mutation will have no effect, and will trigger an error in the future. Either don't modify nodes after running them or create a new session.
+Running attack FastGradientMethod(norm=2, eps=0.29999995, eps_step=0.01, targeted=True, num_random_init=1, batch_size=32, minimal=True, summary_writer=None, )...
+Running attack FastGradientMethod(norm=2, eps=0.29999995, eps_step=0.01, targeted=False, num_random_init=1, batch_size=32, minimal=True, summary_writer=None, )...
+Running attack MomentumIterativeMethod(norm=2, eps=0.29999995, eps_step=0.01, decay=1.0, targeted=False, num_random_init=0, batch_size=32, max_iter=500, random_eps=False, summary_writer=None, verbose=False, )...
+Running attack MomentumIterativeMethod(norm=2, eps=0.29999995, eps_step=0.01, decay=1.0, targeted=True, num_random_init=0, batch_size=32, max_iter=500, random_eps=False, summary_writer=None, verbose=False, )...
+Running attack ProjectedGradientDescent(norm=2, eps=0.29999995, eps_step=0.01, decay=None, targeted=False, num_random_init=1, batch_size=32, max_iter=500, random_eps=False, summary_writer=None, verbose=False, )...
+Running attack ProjectedGradientDescent(norm=2, eps=0.29999995, eps_step=0.01, decay=None, targeted=True, num_random_init=1, batch_size=32, max_iter=500, random_eps=False, summary_writer=None, verbose=False, )...
+We have 10000 gloro robustness results to compare against
+Model accuracy: 97.59
+Robustness on PGD adversarial samples: 96.88%
+Robust accuracy on PGD adversarial samples: 95.75%
+Norms of non-false-positive vectors that cause classification changes: min: 0.00955526546876725; max: 0.299999999820675
+False positives in PGD attack: 10
+Norms of false positive vectors: min: 0.300000006017255; max: 0.300000056367092
+Number of PGD attacks succeeding against certified robust outputs: 0
+Number of PGD attacks succeeding against gloro certified robust outputs: 0

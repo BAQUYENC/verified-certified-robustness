@@ -1,0 +1,13 @@
+2c2f: c(16,2,1).c(2,2,1).d(100).d(10) on mnist, epsilon 0.3
+Verified certifier, 6 Gram iterations (results/cnn/2c2f/gram-6.log):
+  Proportion robust: 0.9198
+  Proportion correct: 0.9759
+  Proportion robust and correct: 0.9156
+  Seconds to compute the bounds: 6466
+Unverified gloro certifier (statistics from training):
+  accuracy: 0.9758999943733215
+  robustness: 0.939800001680851
+  vra: 0.9343000054359436
+  gloro Lipschitz bound computation time (seconds): 0.09620212500158232
+Measured robustness (PGD): 0.9688
+Measured robust accuracy (PGD): 0.9575

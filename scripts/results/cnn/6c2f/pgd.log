@@ -1,0 +1,77 @@
+/Users/admin/verified-certified-robustness/.venv/lib/python3.11/site-packages/art/estimators/certification/__init__.py:30: UserWarning: PyTorch not found. Not importing DeepZ or Interval Bound Propagation functionality
+  warnings.warn("PyTorch not found. Not importing DeepZ or Interval Bound Propagation functionality")
+2026-11-09 21:47:56.767208: I tensorflow/compiler/mlir/mlir_graph_optimization_pass.cc:375] MLIR V1 optimization pass is not enabled
+2026-11-09 21:47:56.773289: W tensorflow/c/c_api.cc:304] Operation '{name:'dense_1/kernel/Assign' id:148 op device:{requested: '', assigned: ''} def:{{{node dense_1/kernel/Assign}} = AssignVariableOp[_has_manual_control_dependencies=true, dtype=DT_FLOAT, validate_shape=false](dense_1/kernel, dense_1/kernel/Initializer/stateless_random_uniform)}}' was changed by setting attribute after it was run by a session. This mutation will have no effect, and will trigger an error in the future. Either don't modify nodes after running them or create a new session.
+
+
+Running with internal layer dimensions: c(32,2,1).c(32,2,1).c(32,2,1).c(64,2,1).c(64,2,1).c(2,2,1).d(512).d(10)
+Running with input size: 32
+Running attacks with epsilon: 0.141
+MAX_ITER: 500
+Building zero-bias gloro model from saved weights...
+Model: "model"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #   
+=================================================================
+ input_1 (InputLayer)        [(None, 32, 32, 3)]       0         
+                                                                 
+ zero_padding2d (ZeroPaddin  (None, 34, 34, 3)         0         
+ g2D)                                                            
+                                                                 
+ conv2d (Conv2D)             (None, 33, 33, 32)        384       
+                                                                 
+ zero_padding2d_1 (ZeroPadd  (None, 35, 35, 32)        0         
+ ing2D)                                                          
+                                                                 
+ conv2d_1 (Conv2D)           (None, 34, 34, 32)        4096      
+                                                                 
+ zero_padding2d_2 (ZeroPadd  (None, 36, 36, 32)        0         
+ ing2D)                                                          
+                                                                 
+ conv2d_2 (Conv2D)           (None, 35, 35, 32)        4096      
+                                                                 
+ zero_padding2d_3 (ZeroPadd  (None, 37, 37, 32)        0         
+ ing2D)                                                          
+                                                                 
+ conv2d_3 (Conv2D)           (None, 36, 36, 64)        8192      
+                                                                 
+ zero_padding2d_4 (ZeroPadd  (None, 38, 38, 64)        0         
+ ing2D)                                                          
+                                                                 
+ conv2d_4 (Conv2D)           (None, 37, 37, 64)        16384     
+                                                                 
+ zero_padding2d_5 (ZeroPadd  (None, 39, 39, 64)        0         
+ ing2D)                                                          
+                                                                 
+ conv2d_5 (Conv2D)           (None, 38, 38, 2)         512       
+                                                                 
+ flatten (Flatten)           (None, 2888)              0         
+                                                                 
+ dense (Dense)               (None, 512)               1478656   
+                                                                 
+ dense_1 (Dense)             (None, 10)                5120      
+                                                                 
+=================================================================
+Total params: 1517440 (5.79 MB)
+Trainable params: 1517440 (5.79 MB)
+Non-trainable params: 0 (0.00 Byte)
+_________________________________________________________________
+/Users/admin/verified-certified-robustness/.venv/lib/python3.11/site-packages/keras/src/engine/training_v1.py:2359: UserWarning: `Model.state_updates` will be removed in a future version. This property should not be used in TensorFlow 2.0, as `updates` are applied automatically.
+  updates=self.state_updates,
+2026-11-09 21:47:57.113065: W tensorflow/c/c_api.cc:304] Operation '{name:'dense_1/MatMul' id:151 op device:{requested: '', assigned: ''} def:{{{node dense_1/MatMul}} = MatMul[T=DT_FLOAT, _has_manual_control_dependencies=true, transpose_a=false, transpose_b=false](dense/Relu, dense_1/MatMul/ReadVariableOp)}}' was changed by setting attribute after it was run by a session. This mutation will have no effect, and will trigger an error in the future. Either don't modify nodes after running them or create a new session.
+2026-11-09 21:47:57.118228: W tensorflow/c/c_api.cc:304] Operation '{name:'count/Assign' id:194 op device:{requested: '', assigned: ''} def:{{{node count/Assign}} = AssignVariableOp[_has_manual_control_dependencies=true, dtype=DT_FLOAT, validate_shape=false](count, count/Initializer/zeros)}}' was changed by setting attribute after it was run by a session. This mutation will have no effect, and will trigger an error in the future. Either don't modify nodes after running them or create a new session.
+Running attack FastGradientMethod(norm=2, eps=0.14099994999999999, eps_step=0.01, targeted=True, num_random_init=1, batch_size=32, minimal=True, summary_writer=None, )...
+Running attack FastGradientMethod(norm=2, eps=0.14099994999999999, eps_step=0.01, targeted=False, num_random_init=1, batch_size=32, minimal=True, summary_writer=None, )...
+Running attack MomentumIterativeMethod(norm=2, eps=0.14099994999999999, eps_step=0.01, decay=1.0, targeted=False, num_random_init=0, batch_size=32, max_iter=500, random_eps=False, summary_writer=None, verbose=False, )...
+Running attack MomentumIterativeMethod(norm=2, eps=0.14099994999999999, eps_step=0.01, decay=1.0, targeted=True, num_random_init=0, batch_size=32, max_iter=500, random_eps=False, summary_writer=None, verbose=False, )...
+Running attack ProjectedGradientDescent(norm=2, eps=0.14099994999999999, eps_step=0.01, decay=None, targeted=False, num_random_init=1, batch_size=32, max_iter=500, random_eps=False, summary_writer=None, verbose=False, )...
+Running attack ProjectedGradientDescent(norm=2, eps=0.14099994999999999, eps_step=0.01, decay=None, targeted=True, num_random_init=1, batch_size=32, max_iter=500, random_eps=False, summary_writer=None, verbose=False, )...
+We have 10000 gloro robustness results to compare against
+Model accuracy: 53.52
+Robustness on PGD adversarial samples: 66.33%
+Robust accuracy on PGD adversarial samples: 42.12%
+Norms of non-false-positive vectors that cause classification changes: min: 0.00863707984238513; max: 0.140999999925315
+False positives in PGD attack: 2092
+Norms of false positive vectors: min: 0.141000000014671; max: 0.141000775488479
+Number of PGD attacks succeeding against certified robust outputs: 0
+Number of PGD attacks succeeding against gloro certified robust outputs: 0

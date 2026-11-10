@@ -1,0 +1,11 @@
+cav-mnist: [128,128,128,128,128,128,128,128] on mnist, epsilon 0.3
+Verified certifier, 6 Gram iterations (results/cnn/cav-mnist/gram-6.log):
+  Proportion robust: 0.9418
+  Proportion correct: 0.984
+  Proportion robust and correct: 0.9394
+  Seconds to compute the bounds: 637
+Unverified gloro certifier (statistics from training):
+  accuracy: 0.984000027179718
+  robustness: 0.9576000012457371
+  vra: 0.9541000127792358
+  gloro Lipschitz bound computation time (seconds): 2.2348282919992926

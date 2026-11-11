@@ -1,0 +1,11 @@
+cav-cifar10: [512,256,128,128,128,128,128,128] on cifar10, epsilon 0.141
+Verified certifier, 12 Gram iterations (results/cnn/cav-cifar10/gram-12.log):
+  Proportion robust: 0.4612
+  Proportion correct: 0.5774
+  Proportion robust and correct: 0.3595
+  Seconds to compute the bounds: 68711
+Unverified gloro certifier (statistics from training):
+  accuracy: 0.5774000287055969
+  robustness: 0.4642000198364258
+  vra: 0.36169999837875366
+  gloro Lipschitz bound computation time (seconds): 1.0089400410070084

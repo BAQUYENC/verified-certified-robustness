@@ -65,7 +65,7 @@ module Convolution {
     * layer's output, before ReLU, for input v. Vectors are listed channel by
     * channel, then row by row: input (c, i, j) has index c*n*n + i*n + j, and
     * output (o, y, x) has index o*m*m + y*m + x, where m = OutSize(L).
-    * Compilable only so that it can be tested on small layers.
+    * Only specifications and proofs use it, so the certifier never builds it.
     */
   function ToeplitzMatrix(L: ConvLayer): (T: Matrix)
     requires ValidConv(L)

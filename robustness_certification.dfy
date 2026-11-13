@@ -506,9 +506,10 @@ module RobustnessCertification {
   }
 
   /**
-    * Original CAV 2025 entry point for dense networks. Its signature is unchanged
-    * so main.dfy and the dense pipeline keep working; it now delegates to
-    * GenMarginBoundsFromLastLayer.
+    * Original CAV 2025 entry point for dense networks, with its signature
+    * unchanged; it delegates to GenMarginBoundsFromLastLayer. Nothing calls it
+    * now: main.dfy's network is ghost, so main.dfy calls
+    * GenMarginBoundsFromLastLayer directly.
     */
   method GenMarginBounds(n: NeuralNetwork, s: seq<real>) returns (r: Matrix)
     requires P1: |s| == |n|

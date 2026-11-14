@@ -1,9 +1,15 @@
 """Numerical checks of the axioms that the CNN extension adds to
 operator_norms.dfy for convolutions (ConvGramIdentity, ConvCrop and ConvSchur),
-and of the bound that Norm2Toep computes, on 2,592 random layers. It uses the
-same index conventions as convolution.dfy (ToeplitzEntry) and GramStep, builds
-each layer's matrix explicitly and compares with its spectral norm (by SVD, in
-double precision), so every difference should be at the level of rounding.
+and of the bound that Norm2Toep computes. ConvGramIdentity is checked on 300
+random filters, each on one random input size, and the others on the 2,592
+layers that these filters give with strides 1 to 3 and paddings 0 to k. It uses
+the same index conventions as convolution.dfy (ToeplitzEntry) and GramStep and
+builds each matrix explicitly. It compares matrices entry by entry for
+ConvGramIdentity. For the others, it compares each layer's spectral norm (by
+SVD, in double precision) with the other side of the inequality: the spectral
+norm with stride 1 and maximal non-trivial zero padding (ConvCrop), SchurBound
+(ConvSchur) or Norm2Toep's bound. Any violation should be at the level of
+rounding: where the two sides are equal, the difference can be slightly above 0.
 
 Usage: python3 check_conv_axioms.py"""
 import numpy as np
@@ -22,7 +28,8 @@ def toeplitz(K, cIn, n, cOut, k, s, p):
                         for j in range(n):
                             a, b = i + p - y * s, j + p - x * s
                             if 0 <= a < k and 0 <= b < k:
-                                T[o * m * m + y * m + x, c * n * n + i * n + j] = K[o, c, a, b]
+                                T[o * m * m + y * m + x, c * n *
+                                    n + i * n + j] = K[o, c, a, b]
     return T
 
 
@@ -68,11 +75,15 @@ def norm2toep(K, n, N):
     return v
 
 
-sigma = lambda T: np.linalg.norm(T, 2)
+def sigma(T): return np.linalg.norm(T, 2)
+
+
 worst = {"gram": 0.0, "crop": -np.inf, "schur": -np.inf, "n2t": -np.inf}
 cases = 0
-for _ in range(300):
-    cOut, cIn, k, n = rng.integers(1, 4), rng.integers(1, 4), rng.integers(1, 4), rng.integers(2, 6)
+FILTERS = 300
+for _ in range(FILTERS):
+    cOut, cIn, k, n = rng.integers(1, 4), rng.integers(
+        1, 4), rng.integers(1, 4), rng.integers(2, 6)
     K = rng.standard_normal((cOut, cIn, k, k))
     full = toeplitz(K, cIn, n, cOut, k, 1, k - 1)
     same_gram = toeplitz(gram_step(K), cIn, n, cIn, 2 * k - 1, 1, k - 1)
@@ -87,8 +98,12 @@ for _ in range(300):
             worst["schur"] = max(worst["schur"], sigma(T) - schur(K))
             for N in (1, 2, 3):
                 worst["n2t"] = max(worst["n2t"], sigma(T) - norm2toep(K, n, N))
-print(f"{cases} layers (random filters, strides 1-3, paddings 0..k):")
-print(f"  ConvGramIdentity: max |T^T T - SameConv(GramStep)| = {worst['gram']:.2e}")
-print(f"  ConvCrop:  max sigma(T) - sigma(T_full)  = {worst['crop']:.2e}  (must be <= 0)")
-print(f"  ConvSchur: max sigma(T) - SchurBound(K)   = {worst['schur']:.2e}  (must be <= 0)")
-print(f"  Norm2Toep, N = 1..3: max sigma(T) - bound = {worst['n2t']:.2e}  (must be <= 0)")
+print(f"{FILTERS} random filters, {cases} layers (strides 1-3, paddings 0..k):")
+print(
+    f"  ConvGramIdentity: max |T^T T - SameConv(GramStep)| = {worst['gram']:.2e}")
+print(
+    f"  ConvCrop:  max sigma(T) - sigma(T_full)  = {worst['crop']:.2e}  (<= 0 up to rounding)")
+print(
+    f"  ConvSchur: max sigma(T) - SchurBound(K)   = {worst['schur']:.2e}  (<= 0 up to rounding)")
+print(
+    f"  Norm2Toep, N = 1..3: max sigma(T) - bound = {worst['n2t']:.2e}  (<= 0 up to rounding)")

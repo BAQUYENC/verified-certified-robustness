@@ -600,19 +600,6 @@ module OperatorNorms {
     MonotonicSqrt(Sum(Apply(v, Square)), Sum(Apply(u, Square)));
   }
 
-  /** A larger number is also a spectral norm upper bound. */
-  lemma SpecNormUpperBoundMono(b: real, s: real, m: Matrix)
-    requires IsSpecNormUpperBound(b, m) && b <= s
-    ensures IsSpecNormUpperBound(s, m)
-  {
-    PositiveL2();
-    forall v: Vector | |v| == |m[0]|
-      ensures L2(MV(m, v)) <= s * L2(v)
-    {
-      MultIsMono(b, s, L2(v));
-    }
-  }
-
   /* ============== Convolutional layers: Algorithm 3 (norm2_toep) ============== */
 
   /**

@@ -291,6 +291,10 @@ input_size = int(sys.argv[7])
 
 print(f"Running with internal layer dimensions: {internal_layers}")
 
+# Unused: train_gloro() receives augmentation but calls doitlib.load_gloro_data
+# without it, so load_gloro_data uses its default, 'none', and no model,
+# CIFAR-10 included, is trained with data augmentation. CAV 2025's
+# train_gloro.py does the same.
 if dataset == "cifar10":
     augmentation = "all"
 else:

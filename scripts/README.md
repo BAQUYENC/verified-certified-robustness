@@ -20,15 +20,18 @@ top-level [`README.md`](../README.md#setting-up)).
 ```
 
 The first form trains a new model with gloro (`train_gloro.py`), in a new
-directory named after the date and the dataset. The second evaluates the model
-that an earlier run created in `basedir`. The script then:
+directory named after the date and the dataset, and then:
 
 1. builds a zero-bias copy of the model and computes its outputs on the test
    set (`zero_bias_saved_model.py`);
 2. writes the weights in the certifier's input format
-   (`make_certifier_format.py`);
-3. certifies the outputs with the certifier;
-4. prints the proportions robust, correct, and robust and correct (the VRA)
+   (`make_certifier_format.py`).
+
+The second form evaluates the model that an earlier run created in `basedir`,
+and reuses that run's outputs and network file. Both forms then:
+
+1. certify the outputs with the certifier;
+2. print the proportions robust, correct, and robust and correct (the VRA)
    (`test_verified_certified_robust_accuracy.py`), gloro's unverified
    statistics, and the certifier's timestamps. The time taken to compute the
    bounds is the difference between "Certifier started at" and "Certifier
@@ -43,10 +46,11 @@ The arguments:
   such as `"[128,128]"` (`[]` for none; the output layer is added), or a CNN
   in the notation of Leino et al. (2021, App. B), such as
   `"c(16,2,1).c(2,2,1).d(100).d(10)"`. `c(C,K,S)` is a convolutional layer with
-  C output channels, a K x K kernel, stride S and K-1 zeros of padding on each
-  side (`c(C,K,S,P)` has P zeros), and `d(D)` is a dense layer with D outputs.
-  Convolutional layers come first, and the last layer is `d(10)`. No layer has
-  a bias, and every layer except the last is followed by ReLU.
+  C output channels, a K x K kernel and stride S, and `d(D)` is a dense layer
+  with D outputs. Leino et al. use SAME padding; here, `c(C,K,S)` has K-1
+  zeros of padding on each side, and `c(C,K,S,P)` has P zeros. Convolutional
+  layers come first, and the last layer is `d(10)`. No layer has a bias, and
+  every layer except the last is followed by ReLU.
 - `robustness_certifier_binary`: usually `../main`.
 - `GRAM_ITERATIONS`: the number of Gram iterations for the dense layers.
   Convolutional layers get the certifier's default `CONV_ITERATIONS`, the
@@ -144,47 +148,75 @@ The three CNNs. `train` certifies each one with 6 Gram iterations, and
 ./doit_verified_robust_gloro.sh train_and_eval cifar10 0.1551 "c(32,2,1).c(32,2,1).c(32,2,1).c(64,2,1).c(64,2,1).c(2,2,1).d(512).d(10)" 0.141 ../main 6 800 256
 ```
 
-4C3F with 4 iterations of Algorithm 3 instead of 3 shows what the default
-costs. `cnn_experiments.sh` has no step for this, so run the certifier
-directly, and then compute the proportions. This takes about 3.7 hours. On a
-Mac, put `caffeinate -i` before `../main` to keep it awake.
+4C3F and 6C2F with 4 iterations of Algorithm 3 instead of 3, and 6 Gram
+iterations, show what the default costs. `cnn_experiments.sh` has no step for
+this, so run the certifier directly, and then compute the proportions, which
+`conv4-accuracy.log` keeps. This takes about 3.7 hours for 4C3F and about 9
+hours for 6C2F. On a Mac, put `caffeinate -i` before `../main` to keep it
+awake.
 
 ```
 D=$(cat results/cnn/4c3f/run_dir.txt)
 A="c(32,2,1).c(32,2,1).c(64,2,1).c(2,2,1).d(512).d(512).d(10)"
-cat "$D/all_mnist_outputs_epsilon_1.75_${A}_300_eval_1.58.txt" | ../main "$D/neural_net_mnist_epsilon_1.75_${A}_300.txt" 6 4 | tee results/cnn/4c3f/conv4-gram-6.json | ts "%Y-%m-%d %H:%M:%S" > results/cnn/4c3f/conv4-gram-6.log
-python3 test_verified_certified_robust_accuracy.py mnist "$A" results/cnn/4c3f/conv4-gram-6.json "$D/model_weights_epsilon_1.75_${A}_300" 28
+L=results/cnn/4c3f/conv4-gram-6.log
+cat "$D/all_mnist_outputs_epsilon_1.75_${A}_300_eval_1.58.txt" | ../main "$D/neural_net_mnist_epsilon_1.75_${A}_300.txt" 6 4 | tee results/cnn/4c3f/conv4-gram-6.json | ts "%Y-%m-%d %H:%M:%S" > "$L"
+python3 test_verified_certified_robust_accuracy.py mnist "$A" results/cnn/4c3f/conv4-gram-6.json "$D/model_weights_epsilon_1.75_${A}_300" 28 | tee results/cnn/4c3f/conv4-accuracy.log
 ```
 
-The bound computation time is the difference between the timestamps of the
-log's first line, `[`, and its line with `"lipschitz_bounds"`.
+```
+D=$(cat results/cnn/6c2f/run_dir.txt)
+A="c(32,2,1).c(32,2,1).c(32,2,1).c(64,2,1).c(64,2,1).c(2,2,1).d(512).d(10)"
+L=results/cnn/6c2f/conv4-gram-6.log
+cat "$D/all_mnist_outputs_epsilon_0.1551_${A}_800_eval_0.141.txt" | ../main "$D/neural_net_mnist_epsilon_0.1551_${A}_800.txt" 6 4 | tee results/cnn/6c2f/conv4-gram-6.json | ts "%Y-%m-%d %H:%M:%S" > "$L"
+python3 test_verified_certified_robust_accuracy.py cifar10 "$A" results/cnn/6c2f/conv4-gram-6.json "$D/model_weights_epsilon_0.1551_${A}_800" 32 | tee results/cnn/6c2f/conv4-accuracy.log
+```
 
-Last, CAV 2025's CIFAR-10 model. Certifying it again takes many hours: the CAV
-2025 run with 6 Gram iterations took 16.4 hours. The results therefore use the
-result file of that run, kept in `cav2025-models.zip`. `setup-cav` and `gloro`
-time gloro's bound computation (about 1 s). `setup-cav` deletes the result
-files from its copy of the model, so unzip the model again to compute the
-proportions from the result file:
+The evaluation script names the outputs and network files
+`all_mnist_outputs_…` and `neural_net_mnist_…` for every dataset, CIFAR-10
+included. After either model, add the certifier's timestamps to
+`conv4-accuracy.log`, with the evaluation script's labels. The time taken to
+compute the bounds is the difference between the first two.
+
+```
+{ echo "Certifier started at:         $(head -1 "$L" | cut -c1-19)"
+  echo "Certifier produced bounds at: $(grep -m1 '"lipschitz_bounds"' "$L" | cut -c1-19)"
+  echo "Certifier finished at:        $(tail -1 "$L" | cut -c1-19)"; } | tee -a "${L%/*}/conv4-accuracy.log"
+```
+
+Last, CAV 2025's CIFAR-10 model, also exported again. With 12 Gram iterations,
+CAV 2025's Table 1 gives a verified robustness of 46.12% and a VRA of 35.95%,
+with the bounds computed in 19:02:32. On an M1 MacBook Air, the bounds took
+35,901 s with 6 and 68,711 s with 12. `certify` keeps a Mac awake with
+`caffeinate`, but keep the lid open and the charger connected. `gloro` times
+gloro's bound computation (about 1 s).
 
 ```
 ./cnn_experiments.sh setup-cav cav-cifar10
 ./cnn_experiments.sh gloro cav-cifar10
-unzip -q ../cav2025-models.zip 'cav2025-models/2025-01-28_20:39:32-cifar10/*' -d /tmp/cav
-D='/tmp/cav/cav2025-models/2025-01-28_20:39:32-cifar10'
-A='[512,256,128,128,128,128,128,128]'
-python3 test_verified_certified_robust_accuracy.py cifar10 "$A" "$D/results_epsilon_0.1551_${A}_800_eval_0.141_gram_6.json" "$D/model_weights_epsilon_0.1551_${A}_800" 32
+./cnn_experiments.sh certify cav-cifar10 6 12
+./cnn_experiments.sh summary cav-cifar10 6
+./cnn_experiments.sh summary cav-cifar10 12
 ```
 
-The last command ends with:
+For 6 Gram iterations, compare with CAV 2025's result file in
+`cav2025-models.zip`. `setup-cav` deletes the result files from its copy of the
+model, so unzip the model again, and compute the proportions from that file
+into `cav2025-gram-6-accuracy.log`:
+
+```
+unzip -oq ../cav2025-models.zip 'cav2025-models/2025-01-28_20:39:32-cifar10/*' -d /tmp/cav
+D='/tmp/cav/cav2025-models/2025-01-28_20:39:32-cifar10'
+A='[512,256,128,128,128,128,128,128]'
+python3 test_verified_certified_robust_accuracy.py cifar10 "$A" "$D/results_epsilon_0.1551_${A}_800_eval_0.141_gram_6.json" "$D/model_weights_epsilon_0.1551_${A}_800" 32 | tee results/cnn/cav-cifar10/cav2025-gram-6-accuracy.log
+```
+
+The log ends with the same proportions as `summary-gram-6.txt`:
 
 ```
 Proportion robust: 0.3913
 Proportion correct: 0.5774
 Proportion robust and correct: 0.3166
 ```
-
-To certify the model again instead, run `./cnn_experiments.sh certify cav-cifar10 6`
-and then `./cnn_experiments.sh summary cav-cifar10 6`.
 
 ## Measured robustness
 
@@ -197,14 +229,22 @@ the weights. Quote it, because its name contains `[` or `(`. The script needs
 mpmath and ART (in the CAV 2025 container, run
 `pip install mpmath adversarial-robustness-toolbox==1.19.1` first). It runs
 FGSM, the Momentum Iterative Method and PGD, each targeted and untargeted,
-with 500 iterations for the iterative attacks. It ends with lines like these:
+with 500 iterations for the iterative attacks. With three more arguments, the
+certifier's result JSON, gloro's `gloro_model_results.json` and a directory
+that does not exist yet, as `cnn_experiments.sh pgd` passes them, it also
+counts the attacks that succeed against outputs that the certifier or gloro
+certified robust, and saves those counter-examples in the directory. For
+2C2F, it ends like this (`results/cnn/2c2f/pgd.log`):
 
 ```
-Model accuracy: 72.8
-Robustness on PGD adversarial samples: 53.28%
-Norms of non-false-positive vectors that cause classification changes: min: 0.00599679290863438; max: 0.289841752514313
-False positives in PGD attack: 0
+Model accuracy: 97.59
+Robustness on PGD adversarial samples: 96.88%
+Robust accuracy on PGD adversarial samples: 95.75%
+Norms of non-false-positive vectors that cause classification changes: min: 0.00955526546876725; max: 0.299999999820675
+False positives in PGD attack: 10
+Norms of false positive vectors: min: 0.300000006017255; max: 0.300000056367092
 Number of PGD attacks succeeding against certified robust outputs: 0
+Number of PGD attacks succeeding against gloro certified robust outputs: 0
 ```
 
 "Robustness on PGD adversarial samples" is the measured robustness. The next
@@ -222,8 +262,8 @@ jq -r '.[].debug_msg // empty' 2c2f-gloro-rerun.json
 ```
 
 The last line it prints, `gloro Lipschitz bound computation time (seconds): …`,
-is gloro's time in the results table. The last argument, 100, is the maximum
-number of power-iteration steps.
+is gloro's time in the results table. The last argument, 100, is the most
+times that gloro's `freeze_lc` recomputes the Lipschitz bound.
 
 ## Plots
 
@@ -252,7 +292,7 @@ python3 plot_robustness_vs_gram.py "results/robustness_vs_gram_input_28_[128,128
 
 `results/` also holds the data for two smaller MNIST models, with 7 x 7 and
 14 x 14 inputs. To redo them, train with 1 Gram iteration, and certify the
-model in the directory that this creates (`dir`) with 2 to 10:
+model in the directory that this creates (`dir`) with 2 to 11:
 
 ```
 ./doit_verified_robust_gloro.sh train_and_eval mnist 0.3 "[16]" 0.3 ../main 1 500 256 7
@@ -275,25 +315,26 @@ python3 plot_robustness_vs_gram.py results/robustness_vs_gram_input_7_\[16\].csv
 `check_conv_axioms.py` checks numerically the three axioms that the CNN
 extension adds about convolutions (`ConvGramIdentity`, `ConvCrop` and
 `ConvSchur`, in `operator_norms.dfy`), and the bound that `Norm2Toep` computes.
-It builds the matrices of 2,592 random layers (Gaussian filters with 1 to 3
-input and output channels and kernels of size 1 to 3, on inputs of size 2 to 5,
-with strides 1 to 3 and 0 to K zeros of padding), and compares them with their
-spectral norms, computed by SVD in double precision. It needs only numpy and
-takes about a minute:
+It draws 300 random Gaussian filters, with 1 to 3 input and output channels and
+kernels of size 1 to 3, each on an input of random size 2 to 5, and checks
+`ConvGramIdentity` on each of them. With strides 1 to 3 and 0 to K zeros of
+padding, the filters give 2,592 layers, on which it checks the other two axioms
+and the bound against the layers' spectral norms, computed by SVD in double
+precision. It needs only numpy and takes about a minute:
 
 ```
 python3 check_conv_axioms.py
 ```
 
 Each deviation should be at the level of floating-point rounding. On an M1
-MacBook Air (the last digits depend on the platform), it prints:
+MacBook Air (the deviations vary with the platform), it prints:
 
 ```
-2592 layers (random filters, strides 1-3, paddings 0..k):
+300 random filters, 2592 layers (strides 1-3, paddings 0..k):
   ConvGramIdentity: max |T^T T - SameConv(GramStep)| = 1.42e-14
-  ConvCrop:  max sigma(T) - sigma(T_full)  = 7.11e-15  (must be <= 0)
-  ConvSchur: max sigma(T) - SchurBound(K)   = 0.00e+00  (must be <= 0)
-  Norm2Toep, N = 1..3: max sigma(T) - bound = 4.44e-16  (must be <= 0)
+  ConvCrop:  max sigma(T) - sigma(T_full)  = 5.33e-15  (<= 0 up to rounding)
+  ConvSchur: max sigma(T) - SchurBound(K)   = 0.00e+00  (<= 0 up to rounding)
+  Norm2Toep, N = 1..3: max sigma(T) - bound = 4.44e-16  (<= 0 up to rounding)
 ```
 
 Such tests cannot prove the axioms, but they would catch a misstatement, such

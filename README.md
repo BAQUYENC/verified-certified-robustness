@@ -309,11 +309,11 @@ stride S, and `d(D)` is a dense layer with D outputs. Leino et al. use SAME
 padding; here, `c(C,K,S)` has K-1 zeros of padding on each side, and
 `c(C,K,S,P)` has P zeros.
 
-| Model | Dataset   | ε (training / evaluation) | Architecture                                                              | Inputs to first dense layer |
-| ----- | --------- | ------------------------- | ------------------------------------------------------------------------- | --------------------------- |
-| 2C2F  | `mnist`   | 0.45 / 0.3                | `c(16,2,1).c(2,2,1).d(100).d(10)`                                         | 2·30·30 = 1,800             |
-| 4C3F  | `mnist`   | 1.75 / 1.58               | `c(32,2,1).c(32,2,1).c(64,2,1).c(2,2,1).d(512).d(512).d(10)`              | 2·32·32 = 2,048             |
-| 6C2F  | `cifar10` | 0.1551 / 0.141            | `c(32,2,1).c(32,2,1).c(32,2,1).c(64,2,1).c(64,2,1).c(2,2,1).d(512).d(10)` | 2·38·38 = 2,888             |
+| Model | Dataset   | ε (training / evaluation) | Architecture                                                              |
+| ----- | --------- | ------------------------- | ------------------------------------------------------------------------- |
+| 2C2F  | `mnist`   | 0.45 / 0.3                | `c(16,2,1).c(2,2,1).d(100).d(10)`                                         |
+| 4C3F  | `mnist`   | 1.75 / 1.58               | `c(32,2,1).c(32,2,1).c(64,2,1).c(2,2,1).d(512).d(512).d(10)`              |
+| 6C2F  | `cifar10` | 0.1551 / 0.141            | `c(32,2,1).c(32,2,1).c(32,2,1).c(64,2,1).c(64,2,1).c(2,2,1).d(512).d(10)` |
 
 Each keeps the original's numbers of layers, dense-layer sizes and channel
 widths, but every convolutional layer has a 2 x 2 kernel, stride 1 and one zero

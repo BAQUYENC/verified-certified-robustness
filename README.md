@@ -3,7 +3,8 @@
 This is the robustness certifier of CAV 2025 (Tobler, Syeda and Murray),
 written and verified in Dafny, extended to convolutional neural networks (CNNs)
 with zero-padded convolutional layers and set up to run on Apple silicon
-(arm64) Macs. It still reproduces the CAV 2025 results for dense networks.
+(arm64) Macs. It still reproduces the verified robustness and verified robust
+accuracy (VRA) of CAV 2025's Table 1 for its MNIST and CIFAR-10 models.
 
 - [A Formally Verified Robustness Certifier for Neural Networks](#a-formally-verified-robustness-certifier-for-neural-networks)
   - [Setting up](#setting-up)
@@ -38,9 +39,10 @@ docker run -it cav2025-artifact:latest bash
 source cav2025-artifact/bin/activate
 ```
 
-The container's `/workspace` holds `robustness-verifier/` (this repository),
-`cav2025-artifact/` (the Python virtual environment), `cav2025-models/` (the
-paper's three models and their result files) and `gloro/`.
+The container's `/workspace` holds `robustness-verifier/` (CAV 2025's version
+of this repository, without the CNN extension), `cav2025-artifact/` (the Python
+virtual environment), `cav2025-models/` (the paper's three models and their
+result files) and `gloro/`.
 
 ### Apple silicon, natively
 
@@ -74,19 +76,19 @@ pip check
 
 The pinned versions matter:
 
-- `tensorflow==2.13.0` installs `tensorflow-macos`. pip does not count that as
-  the `tensorflow` that gloro requires, so install gloro with `--no-deps`, or
-  pip adds a newer TensorFlow with Keras 3.
 - `numpy==1.24.3` is the newest numpy that TensorFlow 2.13 accepts.
 - `tensorflow-metadata==1.17.0` needs protobuf 4.25, the newest that
-  TensorFlow 2.13 accepts. Newer releases need protobuf 6 and break
-  `tensorflow_datasets`.
-- `adversarial-robustness-toolbox==1.19.1` is the release that the CAV 2025
-  artifact used. ART 1.20.0 needs Keras 3 and breaks `run_pgd_attack.py`.
+  TensorFlow 2.13 accepts. Release 1.21.0 imports
+  `google.protobuf.runtime_version`, which protobuf 4.25 lacks, so
+  `tensorflow_datasets` then fails to import.
+- `adversarial-robustness-toolbox==1.19.1` was the newest ART release when the
+  CAV 2025 artifact was made. ART 1.20.0 removed support for TensorFlow v1,
+  whose graph mode `run_pgd_attack.py` uses.
 
 Finally, unzip the models into this repository's parent directory
-(`unzip cav2025-models.zip -d ..`), and use `.venv` wherever the instructions
-below say `cav2025-artifact`.
+(`unzip cav2025-models.zip -d ..`), where the commands of
+[Reproducing the CAV 2025 results](#reproducing-the-cav-2025-results) expect
+them.
 
 ### Apple silicon, in Docker
 
@@ -104,15 +106,14 @@ For larger models, raise Docker Desktop's memory limit (Settings > Resources).
 
 ## Verifying and building the certifier
 
-In `robustness-verifier/` (this repository's directory, outside the container),
+In this repository's directory (`robustness-verifier/` in the arm64 container),
 run:
 
 ```
 ./verify_all.sh
 ```
 
-Every file should verify with 0 errors. This takes about a minute (58 s on an
-M1 MacBook Air).
+Every file should verify with 0 errors.
 
 | File                                               | Verified |
 | -------------------------------------------------- | -------- |
@@ -124,7 +125,7 @@ M1 MacBook Air).
 | `neural_networks.dfy`                              | 10       |
 | `parsing.dfy`                                      | 37       |
 | `robustness_certification.dfy`                     | 44       |
-| `operator_norms.dfy` (with `--isolate-assertions`) | 2,300    |
+| `operator_norms.dfy` (with `--isolate-assertions`) | 2,293    |
 
 The verified property is soundness: the certifier says that an output is robust
 only if it is. `main.dfy` asserts it after each call to `CertifyMargin`:
@@ -138,8 +139,7 @@ assert robust ==> forall v: Vector |
 `Robust` is defined in `robustness_certification.dfy` (CAV 2025, Section 4.4),
 and `IsInput` and `NN` in `neural_networks.dfy` (Sections 4.1 and 4.2, where
 `NN` is called ApplyNN). For a CNN, `neuralNet` is the ghost network
-`CNNToNeuralNetwork(cnn)`, so
-the guarantee covers CNNs unchanged (see [The CNN extension](#the-cnn-extension)).
+`CNNToNeuralNetwork(cnn)`, so the guarantee covers CNNs unchanged.
 
 To build the certifier binary `main`, run:
 
@@ -184,13 +184,14 @@ only the characters `0123456789.,-[]` and convolutional layers' headers.
   channels of N x N. Inputs and outputs are listed channel by channel, then row
   by row: pixel (i, j) of channel c is entry c·N·N + i·N + j.
 
-Convolutional layers come first, the last layer is dense, and each layer's
-output size is the next layer's input size.
+The last layer is dense, and each layer's output size is the next layer's input
+size.
 
 ## Reproducing the CAV 2025 results
 
-Run these commands in `robustness-verifier/scripts/`, in the virtual
-environment. The models of the paper's Table 1 are in `cav2025-models/`:
+Run these commands in `scripts/` (`robustness-verifier/scripts/` in the
+containers), in the virtual environment. The models of the paper's Table 1 are
+in `cav2025-models/`:
 `2025-01-25_09:27:46-mnist/`, `2025-01-30_10:58:01-fashion_mnist/` and
 `2025-01-28_20:39:32-cifar10/`. They already hold the paper's result files,
 which the evaluation script will not overwrite, so delete the result JSON
@@ -208,7 +209,7 @@ rm "../../cav2025-models/2025-01-25_09:27:46-mnist/results_epsilon_0.45_[128,128
 ./doit_verified_robust_gloro.sh "../../cav2025-models/2025-01-28_20:39:32-cifar10"/ cifar10 0.1551 "[512,256,128,128,128,128,128,128]" 0.141 ../main 12 800 256
 ```
 
-These take about 20 to 40 minutes, 20 to 50 minutes and 20 to 40 hours. The
+These take about 20 to 40 minutes, 20 to 50 minutes and 19 to 40 hours. The
 arguments are the model's directory, the dataset, the training ε, the
 architecture ("Hidden Neurons" in Table 1), the evaluation ε, the certifier,
 the number of Gram iterations, and the training epochs and batch size. Answer
@@ -225,9 +226,12 @@ Certifier produced bounds at: 2025-04-09 08:27:10
 
 "Proportion robust" is the verified robustness (95.74%), and "Proportion robust
 and correct" is the VRA (95.40%). The time between the two timestamps is the
-time taken to compute the bounds: here 15:59, against 17:02 in Table 1. The run
-also prints gloro's unverified robustness and VRA (95.76% and 95.41%), from
-which Table 1's differences (-0.02 and -0.01) come.
+time taken to compute the bounds: here 15:59, against 17:02 in Table 1. The
+script also looks for gloro's unverified robustness and VRA in
+`gloro_model_results.json`, which this model lacks, so it prints that the file
+does not exist. They are in `gloro_model_stats.json` (see
+[Figure 8](#figure-8)): 95.76% and 95.41%, from which Table 1's differences
+(-0.02 and -0.01) come.
 
 ### Figure 8
 
@@ -260,10 +264,11 @@ before the first dense layer.
 
 What is verified:
 
-- `convolution.dfy` models each convolutional layer as a ghost banded doubly
-  block Toeplitz matrix (`ToeplitzMatrix`), and `CNNToNeuralNetwork` turns a
-  CNN into a CAV 2025 `NeuralNetwork` with one matrix per layer. The matrices
-  are never built at run time.
+- `convolution.dfy` models each convolutional layer as a banded doubly block
+  Toeplitz matrix (`ToeplitzMatrix`), and the ghost function
+  `CNNToNeuralNetwork` turns a CNN into a CAV 2025 `NeuralNetwork` with one
+  matrix per layer. Only ghost code uses these matrices, so they are never
+  built at run time.
 - `ToeplitzIsConv` (`convolution.dfy`) proves that this matrix computes
   `Conv2DZeroPad`, which is defined as Keras computes `ZeroPadding2D(P)`
   followed by `Conv2D(C, K, strides=S, padding='valid', use_bias=False)`. That
@@ -275,8 +280,8 @@ What is verified:
   2025 Gram iteration.
 
 What is assumed: the CAV 2025 axioms (`SpecNorm`, `Sqrt`, `Assumption1` to
-`Assumption4` and `CauchySchwartz`) and four more, at the end of
-`operator_norms.dfy`, each a published or textbook fact:
+`Assumption4` and `CauchySchwartz`) and four more, in the Assumptions section
+of `operator_norms.dfy`, each a published or textbook fact:
 
 - `ConvGramIdentity`: with stride 1 and maximal non-trivial zero padding,
   TᵀT, where T is the layer's matrix, is the matrix of the convolution with
@@ -290,7 +295,8 @@ What is assumed: the CAV 2025 axioms (`SpecNorm`, `Sqrt`, `Assumption1` to
   filter's weights.
 
 `scripts/check_conv_axioms.py` checks the three axioms about convolutions, and
-the bound that `Norm2Toep` computes, numerically on 2,592 random layers.
+the bound that `Norm2Toep` computes, numerically on 300 random filters and the
+2,592 layers built from them.
 
 ## CNN experiments
 
@@ -298,9 +304,10 @@ the bound that `Norm2Toep` computes, numerically on 2,592 random layers.
 
 The experiments use three CNNs inspired by the MNIST 2C2F, MNIST 4C3F and
 CIFAR-10 6C2F models of Leino et al. (2021, App. B), in their notation:
-`c(C,K,S)` is a convolutional layer with C output channels, a K x K kernel,
-stride S and K-1 zeros of padding on each side (`c(C,K,S,P)` has P zeros), and
-`d(D)` is a dense layer with D outputs.
+`c(C,K,S)` is a convolutional layer with C output channels, a K x K kernel and
+stride S, and `d(D)` is a dense layer with D outputs. Leino et al. use SAME
+padding; here, `c(C,K,S)` has K-1 zeros of padding on each side, and
+`c(C,K,S,P)` has P zeros.
 
 | Model | Dataset   | ε (training / evaluation) | Architecture                                                              | Inputs to first dense layer | Weights (original)    |
 | ----- | --------- | ------------------------- | ------------------------------------------------------------------------- | --------------------------- | --------------------- |
@@ -344,16 +351,17 @@ bounds.
 | 4C3F                              | 90.44%   | 10.08% / 44.33% / 60.69%                | 10.08% / 44.25% / 60.12%         | 11,321 s / 1.5 s       |
 | 4C3F, 4 iterations of Algorithm 3 | 90.44%   | 27.16% / 44.33% / 60.69%                | 27.15% / 44.25% / 60.12%         | 13,096 s / 1.5 s       |
 | 6C2F                              | 53.52%   | 5.86% / 46.62% / 66.33%                 | 5.49% / 33.18% / 42.12%          | 28,872 s / 2.0 s       |
+| 6C2F, 4 iterations of Algorithm 3 | 53.52%   | 21.54% / 46.62% / 66.33%                | 18.23% / 33.18% / 42.12%         | 31,753 s / 2.0 s       |
 | CAV 2025 MNIST (dense)            | 98.40%   | 94.18% / 95.76% / –                     | 93.94% / 95.41% / –              | 637 s / 2.2 s          |
-| CAV 2025 CIFAR-10 (dense)\*       | 57.74%   | 39.13% / 46.42% / –                     | 31.66% / 36.17% / –              | – / 1.0 s              |
+| CAV 2025 CIFAR-10 (dense)         | 57.74%   | 39.13% / 46.42% / –                     | 31.66% / 36.17% / –              | 35,901 s / 1.0 s       |
 
-\* The verified figures come from CAV 2025's result file for 6 Gram iterations
-in `cav2025-models.zip`: we did not certify this model again. With 12 Gram
-iterations, CAV 2025 reports 46.12% and 35.95%, with the bounds computed in
-19:02:32 (Table 1).
-
-With 11 Gram iterations, the certifier reproduces the CAV 2025 MNIST model's
-published verified robustness and VRA, 95.74% and 95.40%, exactly, in 1,104 s.
+With the numbers of Gram iterations of CAV 2025's Table 1, the certifier
+reproduces the published verified robustness and VRA exactly: 95.74% and
+95.40% for the MNIST model with 11, in 1,104 s, and 46.12% and 35.95% for the
+CIFAR-10 model with 12, in 68,711 s (19:05:11, against 19:02:32 in Table 1).
+With 6, its CIFAR-10 figures equal those computed from CAV 2025's result file
+in `cav2025-models.zip`
+(`scripts/results/cnn/cav-cifar10/cav2025-gram-6-accuracy.log`).
 
 The attacks found adversarial examples for 312, 3,931 and 3,367 test points of
 2C2F, 4C3F and 6C2F, but none for an output that the certifier, with 6 Gram

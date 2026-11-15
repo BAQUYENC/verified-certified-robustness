@@ -11,6 +11,7 @@ top-level [`README.md`](../README.md#setting-up)).
 | `get_gloro_robustness_results.py`                 | Recompute gloro's unverified statistics and time its bound computation     |
 | `gram_sweep_csv.py`, `plot_robustness_vs_gram.py` | Plot robustness or VRA against the number of Gram iterations               |
 | `check_conv_axioms.py`                            | Check the convolution axioms numerically                                   |
+| `check_export.py`                                 | Check that the network file computes the Keras model's outputs             |
 
 ## The evaluation script
 
@@ -83,6 +84,8 @@ For a CNN:
   writes each convolutional layer as `conv(C_in,N,C,K,S,P)` and its kernel. It
   also reorders the first dense layer's rows from the order of Keras' `Flatten`
   (row, column, channel) to the certifier's (channel, row, column).
+  `check_export.py` checks the result (see
+  [Checking the exported network](#checking-the-exported-network)).
 - Keep the first dense layer's number of inputs, C·M·M for the last
   convolutional layer's C channels of M x M, small. The Gram iteration's matrix
   has one row and one column per input.
@@ -104,17 +107,20 @@ exported again with today's `make_certifier_format.py`:
 
 ```
 ./cnn_experiments.sh setup-cav cav-mnist
+./cnn_experiments.sh check-export cav-mnist
 ./cnn_experiments.sh certify cav-mnist 6 11
 ./cnn_experiments.sh gloro cav-mnist
 ./cnn_experiments.sh summary cav-mnist 6
 ./cnn_experiments.sh summary cav-mnist 11
 ```
 
-The three CNNs. `train` certifies each one with 6 Gram iterations, and
-`certify` adds the other numbers of Gram iterations:
+The three CNNs. `train` certifies each one with 6 Gram iterations,
+`check-export` checks its network file, and `certify` adds the other numbers
+of Gram iterations:
 
 ```
 ./cnn_experiments.sh train 2c2f
+./cnn_experiments.sh check-export 2c2f
 ./cnn_experiments.sh gloro 2c2f
 ./cnn_experiments.sh certify 2c2f 1 2 3 4 5 7 8 9 10
 ./cnn_experiments.sh pgd 2c2f
@@ -124,6 +130,7 @@ The three CNNs. `train` certifies each one with 6 Gram iterations, and
 
 ```
 ./cnn_experiments.sh train 4c3f
+./cnn_experiments.sh check-export 4c3f
 ./cnn_experiments.sh gloro 4c3f
 ./cnn_experiments.sh certify 4c3f 1 2 3 4 8
 ./cnn_experiments.sh pgd 4c3f
@@ -133,6 +140,7 @@ The three CNNs. `train` certifies each one with 6 Gram iterations, and
 
 ```
 ./cnn_experiments.sh train 6c2f
+./cnn_experiments.sh check-export 6c2f
 ./cnn_experiments.sh gloro 6c2f
 ./cnn_experiments.sh certify 6c2f 1 2 3 4 8
 ./cnn_experiments.sh pgd 6c2f
@@ -192,6 +200,7 @@ gloro's bound computation (about 1 s).
 
 ```
 ./cnn_experiments.sh setup-cav cav-cifar10
+./cnn_experiments.sh check-export cav-cifar10
 ./cnn_experiments.sh gloro cav-cifar10
 ./cnn_experiments.sh certify cav-cifar10 6 12
 ./cnn_experiments.sh summary cav-cifar10 6
@@ -340,3 +349,30 @@ MacBook Air (the deviations vary with the platform), it prints:
 Such tests cannot prove the axioms, but they would catch a misstatement, such
 as an off-by-one index in the Gram filter or the padding. The fourth axiom,
 `SpecNormTriangle`, is the triangle inequality for the spectral norm.
+
+## Checking the exported network
+
+The certifier's guarantee is about the network in its input file, but the
+outputs that it certifies come from the Keras model that
+`zero_bias_saved_model.py` builds from the weight CSVs. Neither
+`make_certifier_format.py` nor the certifier's parser is verified.
+`check_export.py` checks, on the test set, that the network file computes the
+Keras model's outputs, which would catch, for example, a wrong kernel layout
+or `Flatten` order:
+
+```
+python3 check_export.py dataset INTERNAL_LAYER_SIZES model_weights_csv_dir neural_net_file model_outputs_file input_size
+./cnn_experiments.sh check-export MODEL
+```
+
+It reads the network file as `ParseCNN` (`parsing.dfy`) does, checks its
+layers against `INTERNAL_LAYER_SIZES`, and evaluates it in double precision as
+the Dafny definitions say: `Conv2DZeroPad` for a convolutional layer, the
+transposed matrix for a dense one, and ReLU after every layer except the last.
+It compares the outputs on every test point with the Keras model's, rebuilt as
+`zero_bias_saved_model.py` builds it, and with the output file that the
+certifier read, which keeps 5 decimal places. It passes, with exit status 0,
+if every output is within 0.0001 + 0.0001 x |output| of both (`--atol` and
+`--rtol` change these). The `check-export` step runs it on a model's run
+directory and keeps its output in `results/cnn/MODEL/check-export.log`. Like
+the axiom check, it is a numerical check, not a proof.

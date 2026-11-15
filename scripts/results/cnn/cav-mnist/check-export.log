@@ -1,0 +1,21 @@
+Network file: cav2025-rerun/2025-01-25_09:27:46-mnist/neural_net_mnist_epsilon_0.45_[128,128,128,128,128,128,128,128]_500.txt
+  layer 1: dense: 784 inputs, 128 outputs
+  layer 2: dense: 128 inputs, 128 outputs
+  layer 3: dense: 128 inputs, 128 outputs
+  layer 4: dense: 128 inputs, 128 outputs
+  layer 5: dense: 128 inputs, 128 outputs
+  layer 6: dense: 128 inputs, 128 outputs
+  layer 7: dense: 128 inputs, 128 outputs
+  layer 8: dense: 128 inputs, 128 outputs
+  layer 9: dense: 128 inputs, 10 outputs
+  the layers are those of [128,128,128,128,128,128,128,128] on 1 x 28 x 28 images
+Test points: 10000; tolerance: |difference| <= 0.0001 + 0.0001 x |output|
+Keras model (float32) and network file (float64):
+  largest |difference|: 2.38e-05 (largest |output|: 44.9)
+  test points with every output within the tolerance: 10000 of 10000
+  test points with the same predicted class: 10000 of 10000
+Output file that the certifier read (cav2025-rerun/2025-01-25_09:27:46-mnist/all_mnist_outputs_epsilon_0.45_[128,128,128,128,128,128,128,128]_500.txt) and network file:
+  largest |difference|: 2.76e-05 (largest |output|: 44.9)
+  test points with every output within the tolerance: 10000 of 10000
+  test points with the same predicted class: 10000 of 10000
+PASS: the network file computes the Keras model's outputs, within the tolerance, on every test point

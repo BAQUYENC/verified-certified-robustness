@@ -1,0 +1,20 @@
+Network file: 2026-11-07_07:25:35-cifar10/neural_net_mnist_epsilon_0.1551_c(32,2,1).c(32,2,1).c(32,2,1).c(64,2,1).c(64,2,1).c(2,2,1).d(512).d(10)_800.txt
+  layer 1: conv(3,32,32,2,1,1): 3 x 32 x 32 inputs, 32 x 33 x 33 outputs
+  layer 2: conv(32,33,32,2,1,1): 32 x 33 x 33 inputs, 32 x 34 x 34 outputs
+  layer 3: conv(32,34,32,2,1,1): 32 x 34 x 34 inputs, 32 x 35 x 35 outputs
+  layer 4: conv(32,35,64,2,1,1): 32 x 35 x 35 inputs, 64 x 36 x 36 outputs
+  layer 5: conv(64,36,64,2,1,1): 64 x 36 x 36 inputs, 64 x 37 x 37 outputs
+  layer 6: conv(64,37,2,2,1,1): 64 x 37 x 37 inputs, 2 x 38 x 38 outputs
+  layer 7: dense: 2888 inputs, 512 outputs
+  layer 8: dense: 512 inputs, 10 outputs
+  the layers are those of c(32,2,1).c(32,2,1).c(32,2,1).c(64,2,1).c(64,2,1).c(2,2,1).d(512).d(10) on 3 x 32 x 32 images
+Test points: 10000; tolerance: |difference| <= 0.0001 + 0.0001 x |output|
+Keras model (float32) and network file (float64):
+  largest |difference|: 1.04e-05 (largest |output|: 16)
+  test points with every output within the tolerance: 10000 of 10000
+  test points with the same predicted class: 10000 of 10000
+Output file that the certifier read (2026-11-07_07:25:35-cifar10/all_mnist_outputs_epsilon_0.1551_c(32,2,1).c(32,2,1).c(32,2,1).c(64,2,1).c(64,2,1).c(2,2,1).d(512).d(10)_800.txt) and network file:
+  largest |difference|: 1.29e-05 (largest |output|: 16)
+  test points with every output within the tolerance: 10000 of 10000
+  test points with the same predicted class: 10000 of 10000
+PASS: the network file computes the Keras model's outputs, within the tolerance, on every test point

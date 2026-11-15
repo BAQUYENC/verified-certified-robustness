@@ -8,6 +8,8 @@
 #   train MODEL         train MODEL and certify it with its default Gram iterations
 #   certify MODEL N...  certify MODEL again with N Gram iterations, for each N
 #                       (an N that finished is skipped, so a sweep can be resumed)
+#   check-export MODEL  check, on the test set, that the network file computes
+#                       the Keras model's outputs (check_export.py)
 #   pgd MODEL           measured robustness and robust accuracy by PGD attacks
 #                       (needs mpmath and ART)
 #   gloro MODEL         gloro's unverified statistics and Lipschitz bound time
@@ -72,6 +74,8 @@ if [ -f "$R/run_dir.txt" ]; then RUN_DIR=$(cat "$R/run_dir.txt"); fi
 
 weights_dir() { echo "$RUN_DIR/model_weights_epsilon_${TRAIN_EPS}_${ARCH}_${EPOCHS}"; }
 results_json() { echo "$RUN_DIR/results_epsilon_${TRAIN_EPS}_${ARCH}_${EPOCHS}_eval_${EVAL_EPS}_gram_$1.json"; }
+net_file() { echo "$RUN_DIR/neural_net_mnist_epsilon_${TRAIN_EPS}_${ARCH}_${EPOCHS}.txt"; }
+outputs_file() { echo "$RUN_DIR/all_mnist_outputs_epsilon_${TRAIN_EPS}_${ARCH}_${EPOCHS}.txt"; }
 
 need_run_dir() {
     if [ -z "$RUN_DIR" ]; then
@@ -134,6 +138,11 @@ case "$STEP" in
             fi
             doit "$RUN_DIR" "$n" "$log"
         done
+        ;;
+    check-export)
+        need_run_dir
+        TF_CPP_MIN_LOG_LEVEL=2 python3 check_export.py "$DATASET" "$ARCH" "$(weights_dir)" "$(net_file)" \
+            "$(outputs_file)" "$INPUT" 2>&1 | tee "$R/check-export.log"
         ;;
     pgd)
         need_run_dir

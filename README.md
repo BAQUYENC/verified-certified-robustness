@@ -298,6 +298,11 @@ of `operator_norms.dfy`, each a published or textbook fact:
 the bound that `Norm2Toep` computes, numerically on 300 random filters and the
 2,592 layers built from them.
 
+The certificates are about the network in the certifier's input file, whereas
+the certified outputs come from the Keras model. `scripts/check_export.py`
+checks, on the test set, that the network file, read as the certifier reads it
+and evaluated as the Dafny definitions say, computes the Keras model's outputs.
+
 ## CNN experiments
 
 ### Architectures

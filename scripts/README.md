@@ -159,9 +159,9 @@ of Gram iterations:
 4C3F and 6C2F with 4 iterations of Algorithm 3 instead of 3, and 6 Gram
 iterations, show what the default costs. `cnn_experiments.sh` has no step for
 this, so run the certifier directly, and then compute the proportions, which
-`conv4-accuracy.log` keeps. This takes about 3.7 hours for 4C3F and about 9
-hours for 6C2F. On a Mac, put `caffeinate -i` before `../main` to keep it
-awake.
+`conv4-accuracy.log` keeps. Computing the bounds takes about 3.6 hours for 4C3F
+and 8.8 hours for 6C2F. On a Mac, put `caffeinate -i` before `../main` to keep
+it awake.
 
 ```
 D=$(cat results/cnn/4c3f/run_dir.txt)

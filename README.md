@@ -220,13 +220,14 @@ Proportion robust: 0.9574
 Proportion correct: 0.984
 Proportion robust and correct: 0.954
 ...
-Certifier started at:         2025-04-09 08:11:11
-Certifier produced bounds at: 2025-04-09 08:27:10
+Certifier started at:         2026-11-04 02:28:28
+Certifier produced bounds at: 2026-11-04 02:46:52
 ```
 
 "Proportion robust" is the verified robustness (95.74%), and "Proportion robust
 and correct" is the VRA (95.40%). The time between the two timestamps is the
-time taken to compute the bounds: here 15:59, against 17:02 in Table 1. The
+time taken to compute the bounds: here 18:24 on an M1 MacBook Air
+(`scripts/results/cnn/cav-mnist/gram-11.log`), against 17:02 in Table 1. The
 script also looks for gloro's unverified robustness and VRA in
 `gloro_model_results.json`, which this model lacks, so it prints that the file
 does not exist. They are in `gloro_model_stats.json` (see
@@ -369,5 +370,5 @@ in `cav2025-models.zip`
 (`scripts/results/cnn/cav-cifar10/cav2025-gram-6-accuracy.log`).
 
 The attacks found adversarial examples for 312, 3,931 and 3,367 test points of
-2C2F, 4C3F and 6C2F, but none for an output that the certifier, with 6 Gram
-iterations, or GloRo had certified robust.
+2C2F, 4C3F and 6C2F, but none for an output that the certifier, with the
+default iterations, or GloRo had certified robust.
